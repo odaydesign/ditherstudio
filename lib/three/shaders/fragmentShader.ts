@@ -1015,6 +1015,57 @@ export const fragmentShader = `
                         return errorDiffusion(coord, uParam1 * 0.8);
                     }
 
+                    // ============================================================
+                    // PHASE 1: RETRO/VISUAL EFFECTS
+                    // ============================================================
+
+                    // Scanline Dithering - Emulates CRT monitor scanlines
+                    float scanlineDither(vec2 coord) {
+                        float scanlineThickness = uParam1;
+                        float scanlineIntensity = uParam2;
+                        
+                        // Create scanline pattern
+                        float scanline = mod(coord.y, scanlineThickness);
+                        float scanlineMask = smoothstep(0.0, scanlineThickness * 0.3, scanline) * 
+                                            smoothstep(scanlineThickness, scanlineThickness * 0.7, scanline);
+                        
+                        // Combine with base dither pattern
+                        float baseDither = bayer4(coord);
+                        return mix(baseDither, baseDither * (1.0 - scanlineIntensity), scanlineMask);
+                    }
+
+                    // Chromatic Aberration Dithering - RGB channel offset for glitch aesthetic
+                    // Note: This modifies the color sampling, not just the threshold
+                    // Will be applied in main() before dithering
+                    vec3 chromaticAberration(vec2 uv, float offsetStrength, float angle) {
+                        vec2 offset = vec2(cos(angle), sin(angle)) * offsetStrength / uResolution;
+                        
+                        float r = texture2D(tDiffuse, uv + offset).r;
+                        float g = texture2D(tDiffuse, uv).g;
+                        float b = texture2D(tDiffuse, uv - offset).b;
+                        
+                        return vec3(r, g, b);
+                    }
+
+                    // Posterization + Dither Hybrid - Reduces colors then dithers boundaries
+                    float posterizeDither(vec2 coord, vec3 color) {
+                        float colorLevels = uParam1;
+                        float ditherBoundaries = uParam2;
+                        
+                        // Quantize color to levels
+                        float gray = toGray(color);
+                        float step = 1.0 / colorLevels;
+                        float quantized = floor(gray / step) * step;
+                        
+                        // Calculate distance to nearest boundary
+                        float distToBoundary = abs(gray - quantized);
+                        float boundaryMask = smoothstep(0.0, step * 0.5, distToBoundary);
+                        
+                        // Apply dither only near boundaries
+                        float baseDither = bayer4(coord);
+                        return mix(0.5, baseDither, boundaryMask * ditherBoundaries);
+                    }
+
                     float getThreshold(vec2 coord) {
                         if (uAlgorithm == 0) return 0.5; // none
                         if (uAlgorithm == 1) return bayer2(coord); // bayer-ordered
@@ -1058,6 +1109,12 @@ export const fragmentShader = `
                         if (uAlgorithm == 38) return errorDiffusion(coord, uParam1); // fan
                         if (uAlgorithm == 50) return voidAndCluster(coord); // void-and-cluster
                         if (uAlgorithm == 51) return ostromoukhov(coord); // ostromoukhov variable
+                        
+                        // PHASE 1: Retro/Visual Effects
+                        if (uAlgorithm == 52) return scanlineDither(coord); // scanline dithering
+                        // Algorithm 53 (chromatic aberration) is handled in main() before dithering
+                        if (uAlgorithm == 53) return bayer4(coord); // chromatic aberration uses base dither
+                        // Algorithm 54 (posterization) needs color info, handled differently
 
                         return bayer4(coord);
                     }
@@ -1212,7 +1269,11 @@ export const fragmentShader = `
 
 
                         // Apply color modes
-                        if (uColorMode == 2) {
+                        if (uColorMode == 1) {
+                            // Grayscale with Tint
+                            float lum = dot(dithered, vec3(0.299, 0.587, 0.114));
+                            dithered = vec3(lum) * uDuotoneLight;
+                        } else if (uColorMode == 2) {
                             // Duotone
                             float lum = dot(dithered, vec3(0.299, 0.587, 0.114));
                             dithered = mix(uDuotoneDark, uDuotoneLight, lum);

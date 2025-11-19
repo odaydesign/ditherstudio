@@ -48,10 +48,10 @@ export default function Home() {
                 Start Free Trial
               </Link>
               <Link
-                href="/pricing"
+                href="/demo"
                 className="bg-gray-700 hover:bg-gray-600 px-8 py-3 rounded-lg text-lg font-semibold"
               >
-                View Pricing
+                Try Demo
               </Link>
             </SignedOut>
             <SignedIn>

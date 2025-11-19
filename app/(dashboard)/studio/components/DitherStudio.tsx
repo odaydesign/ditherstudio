@@ -3,13 +3,15 @@
 import WebGLCanvas from './canvas/WebGLCanvas';
 import UploadZone from './controls/UploadZone';
 import AlgorithmSelector from './controls/AlgorithmSelector';
+import ColorSettings from './controls/ColorSettings';
+import ColorModeSelector from './controls/ColorModeSelector';
 import { useDitherStore } from '@/store/ditherStore';
 
 export default function DitherStudio() {
   const { grayscale, setGlobalSetting, colors, contrast, brightness, ditherStrength } = useDitherStore();
 
   return (
-    <div className="h-screen grid grid-cols-[300px_400px_1fr] gap-0 bg-[#e8e5dd] font-['JetBrains_Mono',monospace] text-[13px]">
+    <div className="h-screen grid grid-cols-[300px_400px_1fr] gap-0 bg-[#e8e5dd] font-['JetBrains_Mono',monospace] text-[13px] overflow-hidden">
       {/* Column 1: File Upload & Actions */}
       <div className="bg-[#e8e5dd] p-5 border-r border-[#d0cdc4] overflow-y-auto">
         <div className="text-sm font-medium mb-6 text-[#2a2a2a]">TODOGOOLS.APP</div>
@@ -55,6 +57,8 @@ export default function DitherStudio() {
       {/* Column 2: Controls */}
       <div className="bg-[#e8e5dd] p-5 border-r border-[#d0cdc4] overflow-y-auto">
         <AlgorithmSelector />
+        <ColorModeSelector />
+        <ColorSettings />
 
         <div className="mb-8">
           <div className="text-sm font-medium mb-4 text-[#2a2a2a]">GLOBAL SETTINGS</div>

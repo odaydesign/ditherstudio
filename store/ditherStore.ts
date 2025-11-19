@@ -39,6 +39,7 @@ export interface DitherState {
   tritoneMid: string;
   tritoneHighlight: string;
   selectedPalette: string;
+  customPalette: string[];
 
   // Advanced dithering
   serpentine: boolean;
@@ -74,6 +75,8 @@ export interface DitherState {
   setAdvancedSetting: (key: string, value: number | boolean) => void;
   resetAll: () => void;
   setFps: (fps: number) => void;
+  setCustomPaletteColor: (index: number, color: string) => void;
+  setCustomPalette: (colors: string[]) => void;
 }
 
 const defaultState = {
@@ -115,6 +118,7 @@ const defaultState = {
   tritoneMid: '#808080',
   tritoneHighlight: '#ffffff',
   selectedPalette: 'none',
+  customPalette: Array(16).fill('#000000'),
 
   // Advanced dithering
   serpentine: false,
@@ -170,4 +174,12 @@ export const useDitherStore = create<DitherState>((set) => ({
   resetAll: () => set(defaultState),
 
   setFps: (fps) => set({ fps }),
+
+  setCustomPaletteColor: (index, color) =>
+    set((state) => {
+      const newPalette = [...state.customPalette];
+      newPalette[index] = color;
+      return { customPalette: newPalette };
+    }),
+  setCustomPalette: (colors) => set({ customPalette: colors }),
 }));

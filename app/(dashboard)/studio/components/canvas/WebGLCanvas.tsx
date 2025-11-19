@@ -21,6 +21,11 @@ export default function WebGLCanvas() {
   const lastTimeRef = useRef(performance.now());
   const animationFrameRef = useRef<number | null>(null);
 
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
   const [hasImage, setHasImage] = useState(false);
   const [resolution, setResolution] = useState({ width: 0, height: 0 });
 
@@ -66,10 +71,12 @@ export default function WebGLCanvas() {
   }, []);
 
   // Create shader material
-  const createMaterial = (texture: THREE.Texture, width: number, height: number) => {
+  const createMaterial = useCallback((texture: THREE.Texture, width: number, height: number) => {
     if (materialRef.current) {
       materialRef.current.dispose();
     }
+
+    const state = useDitherStore.getState();
 
     const material = new THREE.ShaderMaterial({
       vertexShader,
@@ -77,57 +84,57 @@ export default function WebGLCanvas() {
       uniforms: {
         tDiffuse: { value: texture },
         tPrevious: { value: renderTargetRef.current?.texture || null },
-        uAlgorithm: { value: ditherState.currentAlgorithm },
-        uAlgorithm2: { value: ditherState.secondAlgorithm },
-        uAlgo2Enabled: { value: ditherState.multiAlgoEnabled },
-        uAlgo2BlendMode: { value: ditherState.algoBlendMode },
-        uAlgo2BlendAmount: { value: ditherState.algoBlendAmount },
-        uThreshold: { value: ditherState.threshold },
-        uTemporalWeight: { value: ditherState.temporalWeight },
-        uContrast: { value: ditherState.contrast },
-        uBrightness: { value: ditherState.brightness },
-        uColors: { value: ditherState.colors },
-        uInvert: { value: ditherState.invert },
-        uGrayscale: { value: ditherState.grayscale },
+        uAlgorithm: { value: state.currentAlgorithm },
+        uAlgorithm2: { value: state.secondAlgorithm },
+        uAlgo2Enabled: { value: state.multiAlgoEnabled },
+        uAlgo2BlendMode: { value: state.algoBlendMode },
+        uAlgo2BlendAmount: { value: state.algoBlendAmount },
+        uThreshold: { value: state.threshold },
+        uTemporalWeight: { value: state.temporalWeight },
+        uContrast: { value: state.contrast },
+        uBrightness: { value: state.brightness },
+        uColors: { value: state.colors },
+        uInvert: { value: state.invert },
+        uGrayscale: { value: state.grayscale },
         uResolution: { value: new THREE.Vector2(width, height) },
         uTime: { value: 0 },
-        uParam1: { value: ditherState.param1 },
-        uParam2: { value: ditherState.param2 },
-        uParam3: { value: ditherState.param3 },
-        uParam4: { value: ditherState.param4 },
-        uScale: { value: ditherState.scale },
-        uMidtones: { value: ditherState.midtones },
-        uHighlights: { value: ditherState.highlights },
-        uLumThreshold: { value: ditherState.lumThreshold },
-        uBlur: { value: ditherState.blur },
-        uPixelation: { value: ditherState.pixelation },
-        uColorMode: { value: ditherState.colorMode },
-        uDuotoneDark: { value: new THREE.Color(ditherState.duotoneDark) },
-        uDuotoneLight: { value: new THREE.Color(ditherState.duotoneLight) },
-        uTritoneShadow: { value: new THREE.Color(ditherState.tritoneShadow) },
-        uTritoneMid: { value: new THREE.Color(ditherState.tritoneMid) },
-        uTritoneHighlight: { value: new THREE.Color(ditherState.tritoneHighlight) },
-        uPaletteColors: { value: [] },
-        uPaletteSize: { value: 0 },
-        uSerpentine: { value: ditherState.serpentine },
-        uGammaCorrect: { value: ditherState.gammaCorrect },
-        uDitherStrength: { value: ditherState.ditherStrength },
-        uPatternRandomization: { value: ditherState.patternRandomization },
-        uTemporalDither: { value: ditherState.temporalDither },
-        uTemporalSpeed: { value: ditherState.temporalSpeed },
-        uColorSpace: { value: ditherState.colorSpace },
-        uAdaptiveThreshold: { value: ditherState.adaptiveThreshold },
-        uAdaptiveWindow: { value: ditherState.adaptiveWindow },
-        uEdgePreservation: { value: ditherState.edgePreservation },
-        uBandingReduction: { value: ditherState.bandingReduction },
-        uPixelAspectRatio: { value: ditherState.pixelAspectRatio },
-        uCRTEffect: { value: ditherState.crtEffect },
+        uParam1: { value: state.param1 },
+        uParam2: { value: state.param2 },
+        uParam3: { value: state.param3 },
+        uParam4: { value: state.param4 },
+        uScale: { value: state.scale },
+        uMidtones: { value: state.midtones },
+        uHighlights: { value: state.highlights },
+        uLumThreshold: { value: state.lumThreshold },
+        uBlur: { value: state.blur },
+        uPixelation: { value: state.pixelation },
+        uColorMode: { value: state.colorMode },
+        uDuotoneDark: { value: new THREE.Color(state.duotoneDark) },
+        uDuotoneLight: { value: new THREE.Color(state.duotoneLight) },
+        uTritoneShadow: { value: new THREE.Color(state.tritoneShadow) },
+        uTritoneMid: { value: new THREE.Color(state.tritoneMid) },
+        uTritoneHighlight: { value: new THREE.Color(state.tritoneHighlight) },
+        uPaletteColors: { value: state.customPalette.map((c) => new THREE.Color(c)) },
+        uPaletteSize: { value: 16 },
+        uSerpentine: { value: state.serpentine },
+        uGammaCorrect: { value: state.gammaCorrect },
+        uDitherStrength: { value: state.ditherStrength },
+        uPatternRandomization: { value: state.patternRandomization },
+        uTemporalDither: { value: state.temporalDither },
+        uTemporalSpeed: { value: state.temporalSpeed },
+        uColorSpace: { value: state.colorSpace },
+        uAdaptiveThreshold: { value: state.adaptiveThreshold },
+        uAdaptiveWindow: { value: state.adaptiveWindow },
+        uEdgePreservation: { value: state.edgePreservation },
+        uBandingReduction: { value: state.bandingReduction },
+        uPixelAspectRatio: { value: state.pixelAspectRatio },
+        uCRTEffect: { value: state.crtEffect },
       },
     });
 
     materialRef.current = material;
     return material;
-  };
+  }, []);
 
   // Animation loop
   const animate = useCallback(() => {
@@ -151,13 +158,13 @@ export default function WebGLCanvas() {
     const now = performance.now();
     if (now - lastTimeRef.current >= 1000) {
       const fps = Math.round((frameCountRef.current * 1000) / (now - lastTimeRef.current));
-      ditherState.setFps(fps);
+      useDitherStore.getState().setFps(fps);
       frameCountRef.current = 0;
       lastTimeRef.current = now;
     }
 
     animationFrameRef.current = requestAnimationFrame(animate);
-  }, [ditherState]);
+  }, []);
 
   const startAnimation = useCallback(() => {
     if (animationFrameRef.current) {
@@ -202,7 +209,7 @@ export default function WebGLCanvas() {
       img.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
-  }, [ditherState, startAnimation]);
+  }, [createMaterial, startAnimation]);
 
   // Load video file
   const loadVideo = useCallback((file: File) => {
@@ -243,7 +250,7 @@ export default function WebGLCanvas() {
       video.play();
       startAnimation();
     };
-  }, [ditherState, startAnimation]);
+  }, [createMaterial, startAnimation]);
 
   // Handle file upload
   useEffect(() => {
@@ -288,6 +295,7 @@ export default function WebGLCanvas() {
     material.uniforms.uTritoneShadow.value = new THREE.Color(ditherState.tritoneShadow);
     material.uniforms.uTritoneMid.value = new THREE.Color(ditherState.tritoneMid);
     material.uniforms.uTritoneHighlight.value = new THREE.Color(ditherState.tritoneHighlight);
+    material.uniforms.uPaletteColors.value = ditherState.customPalette.map((c) => new THREE.Color(c));
     material.uniforms.uSerpentine.value = ditherState.serpentine;
     material.uniforms.uGammaCorrect.value = ditherState.gammaCorrect;
     material.uniforms.uDitherStrength.value = ditherState.ditherStrength;
@@ -303,25 +311,77 @@ export default function WebGLCanvas() {
     material.uniforms.uCRTEffect.value = ditherState.crtEffect;
   }, [ditherState]);
 
+  // Handle mouse wheel for zooming
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (!hasImage) return;
+    e.preventDefault();
+    const scaleAmount = -e.deltaY * 0.001;
+    setZoom((prevZoom) => Math.min(Math.max(0.1, prevZoom + scaleAmount), 10));
+  }, [hasImage]);
+
+  // Handle mouse down for panning
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!hasImage) return;
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+  }, [hasImage, pan]);
+
+  // Handle mouse move for panning
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging || !hasImage) return;
+    e.preventDefault();
+    setPan({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y,
+    });
+  }, [isDragging, hasImage, dragStart]);
+
+  // Handle mouse up/leave to stop dragging
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
   return (
-    <div className="flex items-center justify-center w-full h-full bg-[#e8e5dd] p-10">
-      {!hasImage ? (
-        <div className="text-center text-[#999] text-sm">
-          Upload an image or video to get started
-        </div>
-      ) : (
-        <>
-          <canvas
-            ref={canvasRef}
-            className="max-w-full max-h-full w-auto h-auto shadow-lg"
-          />
-          <div className="absolute top-10 right-10 bg-[rgba(232,229,221,0.9)] border border-[#d0cdc4] px-4 py-3 text-xs text-[#666]">
-            <div className="text-[#2a2a2a] font-medium mb-1">
-              <span className="fps">{ditherState.fps} FPS</span>
-            </div>
-            <div>{resolution.width} × {resolution.height}</div>
+    <div className="relative flex items-center justify-center w-full h-full bg-[#e8e5dd] overflow-hidden">
+      {!hasImage && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <div className="text-center text-[#999] text-sm">
+            Upload an image or video to get started
           </div>
-        </>
+        </div>
+      )}
+
+      <div
+        className="w-full h-full absolute inset-0 flex items-center justify-center cursor-move"
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        <canvas
+          ref={canvasRef}
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            transform: `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom})`,
+            transformOrigin: 'center',
+            imageRendering: 'pixelated',
+            cursor: isDragging ? 'grabbing' : 'grab',
+          }}
+          className={`shadow-lg transition-transform duration-75 ease-out ${!hasImage ? 'opacity-0' : 'opacity-100'}`}
+        />
+      </div>
+
+      {hasImage && (
+        <div className="absolute top-10 right-10 bg-[rgba(232,229,221,0.9)] border border-[#d0cdc4] px-4 py-3 text-xs text-[#666] pointer-events-none z-20">
+          <div className="text-[#2a2a2a] font-medium mb-1">
+            <span className="fps">{ditherState.fps} FPS</span>
+          </div>
+          <div>{resolution.width} × {resolution.height}</div>
+          <div className="mt-1">Zoom: {Math.round(zoom * 100)}%</div>
+        </div>
       )}
     </div>
   );

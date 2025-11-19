@@ -6,7 +6,7 @@ import { algorithms } from '@/lib/three/algorithms';
 export default function AlgorithmSelector() {
   const { currentAlgorithm, setAlgorithm, setParam } = useDitherStore();
 
-  const selectedAlgo = algorithms.find(a => a.id === currentAlgorithm);
+  const selectedAlgo = algorithms.find(a => a.shaderValue === currentAlgorithm);
 
   return (
     <div className="mb-8">
@@ -18,7 +18,7 @@ export default function AlgorithmSelector() {
         className="w-full bg-transparent border border-[#d0cdc4] p-2 text-[#2a2a2a] font-['JetBrains_Mono',monospace] text-sm outline-none cursor-pointer"
       >
         {algorithms.map((algo) => (
-          <option key={algo.id} value={algo.id}>
+          <option key={algo.id} value={algo.shaderValue}>
             {algo.name}
           </option>
         ))}
@@ -31,11 +31,11 @@ export default function AlgorithmSelector() {
               <div className="flex justify-between mb-2 text-sm">
                 <span className="text-[#2a2a2a]">{param.label || key}</span>
                 <span className="text-[#666] font-['JetBrains_Mono',monospace]">
-                  {param.type === 'range' ? param.value?.toFixed(2) : param.value}
+                  {param.type === 'slider' ? param.value?.toFixed(2) : param.value}
                 </span>
               </div>
 
-              {param.type === 'range' && (
+              {param.type === 'slider' && (
                 <input
                   type="range"
                   min={param.min}
@@ -50,7 +50,7 @@ export default function AlgorithmSelector() {
                 />
               )}
 
-              {param.type === 'select' && (
+              {(param.type === 'discrete' || param.type === 'discrete_labeled') && (
                 <select
                   value={param.value}
                   onChange={(e) => {
@@ -59,11 +59,15 @@ export default function AlgorithmSelector() {
                   }}
                   className="w-full p-2 bg-[#f5f4f0] border border-[#d0cdc4] text-[#2a2a2a] font-['JetBrains_Mono',monospace] text-xs cursor-pointer outline-none hover:bg-[#e8e7e2] hover:border-[#b8b5ac]"
                 >
-                  {param.options?.map((opt, idx) => (
-                    <option key={idx} value={opt}>
-                      {param.labels?.[idx] || opt}
-                    </option>
-                  ))}
+                  {param.options?.map((opt, idx) => {
+                    const value = typeof opt === 'number' ? opt : opt.value;
+                    const label = typeof opt === 'number' ? opt : opt.label;
+                    return (
+                      <option key={idx} value={value}>
+                        {label}
+                      </option>
+                    );
+                  })}
                 </select>
               )}
             </div>
