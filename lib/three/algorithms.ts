@@ -14,6 +14,7 @@ export interface AlgorithmParameter {
   label: string;
   type?: 'slider' | 'discrete' | 'discrete_labeled';
   options?: number[] | Array<{ value: number; label: string }>;
+  uniformIndex?: 1 | 2 | 3 | 4; // Maps to uParam1, uParam2, uParam3, uParam4
 }
 
 export interface AlgorithmParams {
@@ -92,240 +93,249 @@ export const algoMap: Record<string, number> = {
 };
 
 /**
- * Algorithm parameters (mathematically accurate per algorithm)
+ * Algorithm parameters - Comprehensive parameters for all 66 algorithms
  */
 export const algorithmParams: Record<string, AlgorithmParams> = {
-  // === ERROR DIFFUSION ALGORITHMS ===
-  // These approximate error by distributing it to neighboring pixels
-  // Diffusion controls error distribution strength (0 = none, 1 = standard, >1 = exaggerated)
+  // No parameters needed
+  none: {},
+
+  // === ERROR DIFFUSION (Classic) - 6 algorithms ===
   floyd: {
-    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion' }
+    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion', uniformIndex: 1 }
   },
   ostromoukhov: {
-    diffusion: { value: 1.0, min: 0.1, max: 2.0, step: 0.05, label: 'Diffusion Strength', type: 'slider' }
+    diffusion: { value: 1.0, min: 0.1, max: 2.0, step: 0.05, label: 'Diffusion Strength', uniformIndex: 1 }
   },
   atkinson: {
-    diffusion: { value: 0.75, min: 0.1, max: 1.2, step: 0.05, label: 'Error Diffusion' }
+    diffusion: { value: 0.75, min: 0.1, max: 1.2, step: 0.05, label: 'Error Diffusion', uniformIndex: 1 }
   },
   jarvis: {
-    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion' }
+    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion', uniformIndex: 1 }
   },
   stucki: {
-    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion' }
+    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion', uniformIndex: 1 }
   },
   burkes: {
-    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion' }
+    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion', uniformIndex: 1 }
   },
+
+  // === ERROR DIFFUSION (Sierra Family) - 3 algorithms ===
   sierra: {
-    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion' }
-  },
-  sierralite: {
-    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion' }
+    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion', uniformIndex: 1 }
   },
   sierra2: {
-    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion' }
+    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion', uniformIndex: 1 }
   },
-  fan: {
-    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion' }
+  sierralite: {
+    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion', uniformIndex: 1 }
   },
 
-  // === ORDERED DITHERING (BAYER MATRICES) ===
-  // Use fixed threshold matrices, only scale affects pattern size
+  // === ERROR DIFFUSION (Variants) - 3 algorithms ===
+  falsefloyd: {
+    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion', uniformIndex: 1 }
+  },
+  horizontalstripe: {
+    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Diffusion Strength', uniformIndex: 1 }
+  },
+  verticalstripe: {
+    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Diffusion Strength', uniformIndex: 1 }
+  },
+
+  // === ORDERED DITHERING (Bayer Matrix) - 6 algorithms ===
   bayer2: {
-    scale: { value: 1.0, options: [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0], label: 'Pattern Scale', type: 'discrete' }
+    scale: { value: 1.0, options: [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
+  },
+  bayer3: {
+    scale: { value: 1.0, options: [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
   },
   bayer4: {
-    scale: { value: 1.0, options: [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0], label: 'Pattern Scale', type: 'discrete' }
+    scale: { value: 1.0, options: [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
   },
   bayer8: {
-    scale: { value: 1.0, options: [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0], label: 'Pattern Scale', type: 'discrete' },
-    sharpness: { value: 1.0, min: 0.5, max: 2.0, step: 0.1, label: 'Sharpness' }
+    scale: { value: 1.0, options: [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
   },
   bayer16: {
-    scale: { value: 1.0, options: [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0], label: 'Pattern Scale', type: 'discrete' },
-    sharpness: { value: 1.0, min: 0.5, max: 2.0, step: 0.1, label: 'Sharpness' }
+    scale: { value: 1.0, options: [0.5, 0.75, 1.0, 1.5, 2.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
   },
-
-  // === 4x4 PATTERN DITHERING (Shader-based) ===
-  // Grid size: 1-8 optimal (4x4 matrix tiles), higher values pixelate more
-  // Pixel ratio: 1-5 for visible effect without over-pixelation
   pattern4x4: {
-    gridSize: { value: 4.0, min: 1, max: 8, step: 0.5, label: 'Grid Size' },
-    pixelRatio: { value: 1.0, min: 1, max: 5, step: 0.5, label: 'Pixel Size' }
+    gridSize: { value: 4.0, min: 1, max: 8, step: 0.5, label: 'Grid Size', uniformIndex: 1 }
   },
 
-  // === HALFTONE PATTERNS ===
-  // Screen printing technique - creates dot patterns
-  // Angle in radians: 0°=0, 45°=0.785, 90°=1.57, 180°=3.14
+  // === ORDERED DITHERING (Special Patterns) - 10 algorithms ===
+  disperseddot: {
+    scale: { value: 1.0, options: [0.5, 0.75, 1.0, 1.5, 2.0, 3.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
+  },
+  square5x5: {
+    scale: { value: 1.0, options: [0.5, 0.75, 1.0, 1.5, 2.0, 3.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
+  },
+  corner4x4: {
+    scale: { value: 1.0, options: [0.5, 0.75, 1.0, 1.5, 2.0, 3.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
+  },
+  blockvertical: {
+    blockSize: { value: 4.0, min: 2, max: 16, step: 2, label: 'Block Size', uniformIndex: 1 }
+  },
+  blockhorizontal: {
+    blockSize: { value: 4.0, min: 2, max: 16, step: 2, label: 'Block Size', uniformIndex: 1 }
+  },
+  hatch2x2: {
+    lineWeight: { value: 1.0, min: 0.5, max: 3.0, step: 0.1, label: 'Line Weight', uniformIndex: 1 }
+  },
+  hatch3x3: {
+    lineWeight: { value: 1.0, min: 0.5, max: 3.0, step: 0.1, label: 'Line Weight', uniformIndex: 1 }
+  },
+  hatch4x4: {
+    lineWeight: { value: 1.0, min: 0.5, max: 3.0, step: 0.1, label: 'Line Weight', uniformIndex: 1 }
+  },
+  alternate3x3: {
+    scale: { value: 1.0, options: [0.5, 0.75, 1.0, 1.5, 2.0, 3.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
+  },
+  pattern5x5: {
+    scale: { value: 1.0, options: [0.5, 0.75, 1.0, 1.5, 2.0, 3.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
+  },
+
+  // === HALFTONE SCREENING (Print) - 6 algorithms ===
   halftone: {
-    dotSize: { value: 4.0, options: [2, 3, 4, 5, 6, 8, 10, 12, 16, 20], label: 'Dot Size', type: 'discrete' },
-    angle: {
-      value: 0.785,
-      options: [
-        { value: 0.0, label: '0° (Horizontal/Vertical)' },
-        { value: 0.262, label: '15° (Cyan Separation)' },
-        { value: 0.524, label: '30°' },
-        { value: 0.785, label: '45° (Newspaper Black)' },
-        { value: 1.047, label: '60°' },
-        { value: 1.309, label: '75° (Magenta Separation)' },
-        { value: 1.571, label: '90° (Vertical Lines)' },
-        { value: 3.142, label: '180°' }
-      ],
-      label: 'Screen Angle',
-      type: 'discrete_labeled'
-    },
-    sharpness: { value: 1.0, min: 0.3, max: 2.0, step: 0.1, label: 'Sharpness' }
+    dotSize: { value: 4.0, options: [2, 3, 4, 5, 6, 8, 10, 12, 16, 20], label: 'Dot Size', type: 'discrete', uniformIndex: 1 },
+    angle: { value: 0.0, options: [
+      { value: 0.0, label: '0°' },
+      { value: 0.785, label: '45°' },
+      { value: 1.571, label: '90°' }
+    ], label: 'Angle', type: 'discrete_labeled', uniformIndex: 2 }
   },
   halftone45: {
-    dotSize: { value: 4.0, options: [2, 3, 4, 5, 6, 8, 10, 12, 16, 20], label: 'Dot Size', type: 'discrete' },
-    sharpness: { value: 1.0, min: 0.3, max: 2.0, step: 0.1, label: 'Sharpness' }
+    dotSize: { value: 4.0, options: [2, 3, 4, 5, 6, 8, 10, 12, 16, 20], label: 'Dot Size', type: 'discrete', uniformIndex: 1 }
   },
   ellipse: {
-    dotSize: { value: 4.0, options: [2, 3, 4, 5, 6, 8, 10, 12, 16, 20], label: 'Dot Size', type: 'discrete' },
-    aspect: { value: 1.5, min: 1.0, max: 4.0, step: 0.1, label: 'Aspect Ratio' },
-    angle: {
-      value: 0.785,
-      options: [
-        { value: 0.0, label: '0° (Horizontal/Vertical)' },
-        { value: 0.262, label: '15° (Cyan Separation)' },
-        { value: 0.524, label: '30°' },
-        { value: 0.785, label: '45° (Newspaper Black)' },
-        { value: 1.047, label: '60°' },
-        { value: 1.309, label: '75° (Magenta Separation)' },
-        { value: 1.571, label: '90° (Vertical Lines)' },
-        { value: 3.142, label: '180°' }
-      ],
-      label: 'Screen Angle',
-      type: 'discrete_labeled'
-    }
+    dotSize: { value: 4.0, options: [2, 3, 4, 5, 6, 8, 10, 12, 16, 20], label: 'Dot Size', type: 'discrete', uniformIndex: 1 },
+    aspect: { value: 1.5, min: 1.0, max: 4.0, step: 0.1, label: 'Aspect Ratio', uniformIndex: 2 }
   },
   diamond: {
-    size: { value: 6.0, min: 2, max: 20, step: 0.5, label: 'Diamond Size' },
-    sharpness: { value: 1.0, min: 0.3, max: 2.0, step: 0.1, label: 'Sharpness' }
+    size: { value: 6.0, min: 2, max: 20, step: 0.5, label: 'Diamond Size', uniformIndex: 1 }
   },
   dispersed: {
-    scale: { value: 1.0, options: [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0], label: 'Pattern Scale', type: 'discrete' },
-    density: { value: 0.7, min: 0.2, max: 1.0, step: 0.05, label: 'Dot Density' }
+    scale: { value: 1.0, options: [0.5, 1.0, 1.5, 2.0, 3.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
   },
   cluster: {
-    scale: { value: 1.0, options: [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0], label: 'Pattern Scale', type: 'discrete' },
-    tightness: { value: 0.8, min: 0.2, max: 1.0, step: 0.05, label: 'Cluster Tightness' }
+    scale: { value: 1.0, options: [0.5, 1.0, 1.5, 2.0, 3.0], label: 'Pattern Scale', type: 'discrete', uniformIndex: 1 }
   },
 
-  // === GEOMETRIC PATTERNS ===
+  // === ARTISTIC PATTERNS - 6 algorithms ===
   dots: {
-    spacing: { value: 6.0, min: 2, max: 24, step: 0.5, label: 'Dot Spacing' },
-    randomness: { value: 0.5, min: 0, max: 1, step: 0.05, label: 'Randomness' }
+    spacing: { value: 6.0, min: 2, max: 24, step: 0.5, label: 'Dot Spacing', uniformIndex: 1 }
   },
   lines: {
-    width: { value: 2.0, min: 0.5, max: 10, step: 0.5, label: 'Line Width' },
-    angle: {
-      value: 0.0,
-      options: [
-        { value: 0.0, label: '0° (Horizontal/Vertical)' },
-        { value: 0.262, label: '15° (Cyan Separation)' },
-        { value: 0.524, label: '30°' },
-        { value: 0.785, label: '45° (Newspaper Black)' },
-        { value: 1.047, label: '60°' },
-        { value: 1.309, label: '75° (Magenta Separation)' },
-        { value: 1.571, label: '90° (Vertical Lines)' },
-        { value: 3.142, label: '180°' }
-      ],
-      label: 'Screen Angle',
-      type: 'discrete_labeled'
-    },
-    spacing: { value: 4.0, min: 2, max: 20, step: 0.5, label: 'Line Spacing' }
+    width: { value: 2.0, min: 0.5, max: 10, step: 0.5, label: 'Line Width', uniformIndex: 1 },
+    spacing: { value: 4.0, min: 2, max: 20, step: 0.5, label: 'Line Spacing', uniformIndex: 2 }
   },
   crosshatch: {
-    spacing: { value: 4.0, min: 2, max: 20, step: 0.5, label: 'Line Spacing' },
-    angle: {
-      value: 0.785,
-      options: [
-        { value: 0.0, label: '0° (Horizontal/Vertical)' },
-        { value: 0.262, label: '15° (Cyan Separation)' },
-        { value: 0.524, label: '30°' },
-        { value: 0.785, label: '45° (Newspaper Black)' },
-        { value: 1.047, label: '60°' },
-        { value: 1.309, label: '75° (Magenta Separation)' },
-        { value: 1.571, label: '90° (Vertical Lines)' },
-        { value: 3.142, label: '180°' }
-      ],
-      label: 'Screen Angle',
-      type: 'discrete_labeled'
-    }
-  },
-  checkerssmall: {
-    size: { value: 2.0, min: 1, max: 8, step: 0.5, label: 'Cell Size' }
-  },
-  checkersmedium: {
-    size: { value: 4.0, min: 2, max: 12, step: 0.5, label: 'Cell Size' }
-  },
-  checkerslarge: {
-    size: { value: 8.0, min: 4, max: 20, step: 0.5, label: 'Cell Size' }
-  },
-
-  // === NOISE-BASED PATTERNS ===
-  random: {
-    grain: { value: 0.5, min: 0, max: 1, step: 0.05, label: 'Grain Amount' },
-    seed: { value: 0.0, min: 0, max: 100, step: 1, label: 'Random Seed' }
-  },
-  blue: {
-    frequency: { value: 0.5, min: 0.1, max: 3.0, step: 0.1, label: 'Frequency' },
-    amplitude: { value: 1.0, min: 0.2, max: 2.0, step: 0.1, label: 'Amplitude' }
-  },
-  perlin: {
-    frequency: { value: 0.05, options: [0.01, 0.02, 0.03, 0.05, 0.07, 0.1, 0.15, 0.2, 0.3], label: 'Frequency', type: 'discrete' },
-    octaves: { value: 3, min: 1, max: 8, step: 1, label: 'Octaves', type: 'discrete' }
-  },
-  noise: {
-    intensity: { value: 0.5, min: 0.1, max: 1.0, step: 0.05, label: 'Intensity' },
-    scale: { value: 1.0, options: [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0], label: 'Noise Scale', type: 'discrete' }
-  },
-
-  // === ORGANIC/PROCEDURAL PATTERNS ===
-  voronoi: {
-    cells: { value: 8.0, min: 4, max: 48, step: 2, label: 'Cell Count' },
-    randomness: { value: 0.8, min: 0, max: 1, step: 0.05, label: 'Randomness' }
+    spacing: { value: 4.0, min: 2, max: 20, step: 0.5, label: 'Line Spacing', uniformIndex: 1 }
   },
   stipple: {
-    density: { value: 0.5, min: 0.05, max: 1.0, step: 0.05, label: 'Dot Density' },
-    size: { value: 2.0, min: 0.5, max: 8.0, step: 0.5, label: 'Dot Size' }
+    density: { value: 0.5, min: 0.05, max: 1.0, step: 0.05, label: 'Dot Density', uniformIndex: 1 }
+  },
+  spiral: {
+    frequency: { value: 0.1, min: 0.02, max: 0.5, step: 0.02, label: 'Spiral Frequency', uniformIndex: 1 }
+  },
+  voronoi: {
+    cells: { value: 8.0, min: 4, max: 48, step: 2, label: 'Cell Count', uniformIndex: 1 }
   },
 
-  // === ANIMATED/DYNAMIC PATTERNS ===
-  spiral: {
-    frequency: { value: 0.1, min: 0.02, max: 0.5, step: 0.02, label: 'Spiral Frequency' },
-    twist: { value: 2.0, min: 0.5, max: 10.0, step: 0.5, label: 'Twist Amount' }
+  // === NOISE-BASED - 4 algorithms ===
+  random: {
+    grain: { value: 0.5, min: 0, max: 1, step: 0.05, label: 'Grain Amount', uniformIndex: 1 }
+  },
+  blue: {
+    frequency: { value: 0.5, min: 0.1, max: 3.0, step: 0.1, label: 'Frequency', uniformIndex: 1 }
+  },
+  voidcluster: {
+    clusterSize: { value: 8.0, min: 4, max: 32, step: 2, label: 'Cluster Size', uniformIndex: 1 }
+  },
+  perlin: {
+    frequency: { value: 0.05, options: [0.01, 0.02, 0.03, 0.05, 0.07, 0.1, 0.15, 0.2], label: 'Frequency', type: 'discrete', uniformIndex: 1 }
+  },
+
+  // === GEOMETRIC EFFECTS - 8 algorithms ===
+  checkerssmall: {
+    size: { value: 2.0, min: 1, max: 8, step: 0.5, label: 'Cell Size', uniformIndex: 1 }
+  },
+  checkersmedium: {
+    size: { value: 4.0, min: 2, max: 12, step: 0.5, label: 'Cell Size', uniformIndex: 1 }
+  },
+  checkerslarge: {
+    size: { value: 8.0, min: 4, max: 20, step: 0.5, label: 'Cell Size', uniformIndex: 1 }
   },
   wave: {
-    frequency: { value: 0.1, min: 0.02, max: 0.5, step: 0.02, label: 'Wave Frequency' },
-    amplitude: { value: 1.0, min: 0.2, max: 3.0, step: 0.1, label: 'Wave Amplitude' }
+    frequency: { value: 0.1, min: 0.02, max: 0.5, step: 0.02, label: 'Wave Frequency', uniformIndex: 1 }
   },
   radialburst: {
-    rays: { value: 16, min: 3, max: 64, step: 1, label: 'Ray Count' },
-    rotation: { value: 0.0, min: 0, max: 6.28, step: 0.1, label: 'Rotation (rad)' }
+    rays: { value: 16, min: 3, max: 64, step: 1, label: 'Ray Count', uniformIndex: 1 }
   },
   vortex: {
-    strength: { value: 2.0, min: 0.1, max: 10.0, step: 0.1, label: 'Vortex Strength' },
-    rotation: { value: 3.0, min: 0.1, max: 10.0, step: 0.5, label: 'Rotation Speed' }
-  },
-
-  // === ARTISTIC PATTERNS ===
-  bittone: {
-    bitDepth: { value: 2, min: 1, max: 8, step: 1, label: 'Bit Depth' },
-    pattern: { value: 0.5, min: 0, max: 1, step: 0.05, label: 'Pattern Mix' }
-  },
-  gridlock: {
-    gridSize: { value: 8.0, min: 2, max: 32, step: 2, label: 'Grid Size' },
-    density: { value: 0.5, min: 0.1, max: 1.0, step: 0.05, label: 'Fill Density' }
+    strength: { value: 2.0, min: 0.1, max: 10.0, step: 0.1, label: 'Vortex Strength', uniformIndex: 1 }
   },
   mosaic: {
-    tileSize: { value: 8.0, min: 2, max: 32, step: 2, label: 'Tile Size' },
-    variation: { value: 0.5, min: 0, max: 1, step: 0.05, label: 'Color Variation' }
+    tileSize: { value: 8.0, min: 2, max: 32, step: 2, label: 'Tile Size', uniformIndex: 1 }
+  },
+  gridlock: {
+    gridSize: { value: 8.0, min: 2, max: 32, step: 2, label: 'Grid Size', uniformIndex: 1 }
   },
 
-  // === NO PARAMETERS ===
-  none: {}
+  // === SPECIAL - 2 algorithms ===
+  bittone: {
+    bitDepth: { value: 2, min: 1, max: 8, step: 1, label: 'Bit Depth', uniformIndex: 1 }
+  },
+  fan: {
+    diffusion: { value: 1.0, min: 0.1, max: 1.5, step: 0.05, label: 'Error Diffusion', uniformIndex: 1 }
+  },
+
+  // === QUALITY ENHANCEMENT - 3 algorithms ===
+  adaptivethreshold: {
+    windowSize: { value: 7.0, options: [3, 5, 7, 9, 11, 15], label: 'Window Size', type: 'discrete', uniformIndex: 1 }
+  },
+  anisotropic: {
+    directionality: { value: 0.7, min: 0, max: 1.0, step: 0.05, label: 'Directionality', uniformIndex: 1 }
+  },
+  sobeledge: {
+    edgePreservation: { value: 0.8, min: 0, max: 1.0, step: 0.05, label: 'Edge Preservation', uniformIndex: 1 }
+  },
+
+  // === ADVANCED ERROR DIFFUSION - 1 algorithm ===
+  riemersma: {
+    scale: { value: 8.0, options: [2, 4, 8, 16], label: 'Hilbert Curve Scale', type: 'discrete', uniformIndex: 1 }
+  },
+
+  // === PRINT/PROFESSIONAL - 2 algorithms ===
+  halftonecmyk: {
+    dotSize: { value: 8.0, options: [4, 6, 8, 10, 12, 16, 20], label: 'Dot Size', type: 'discrete', uniformIndex: 1 }
+  },
+  hexagonal: {
+    hexSize: { value: 12.0, min: 5, max: 30, step: 1, label: 'Hexagon Size', uniformIndex: 1 }
+  },
+
+  // === CREATIVE/ARTISTIC - 6 algorithms ===
+  thresholdmap: {
+    patternType: { value: 0, options: [
+      { value: 0, label: 'Concentric Circles' },
+      { value: 1, label: 'Diagonal Lines' },
+      { value: 2, label: 'Brick Pattern' },
+      { value: 3, label: 'Organic Noise' }
+    ], label: 'Pattern Type', type: 'discrete_labeled', uniformIndex: 1 }
+  },
+  kuwahara: {
+    kernelSize: { value: 3, options: [2, 3, 4, 5], label: 'Filter Size', type: 'discrete', uniformIndex: 1 }
+  },
+  displacement: {
+    strength: { value: 5.0, min: 0, max: 10, step: 0.5, label: 'Displacement Strength', uniformIndex: 1 }
+  },
+  reactiondiffusion: {
+    scale: { value: 15.0, min: 5, max: 30, step: 1, label: 'Pattern Scale', uniformIndex: 1 }
+  },
+  morphology: {
+    kernelSize: { value: 2.0, options: [1, 2, 3, 4, 5], label: 'Kernel Size', type: 'discrete', uniformIndex: 1 }
+  },
+  multiscale: {
+    scales: { value: 3, options: [2, 3, 4, 5], label: 'Number of Scales', type: 'discrete', uniformIndex: 1 }
+  }
 };
 
 /**
@@ -348,29 +358,29 @@ export const algorithms: Algorithm[] = [
   { id: 'sierralite', name: 'Sierra Lite (4 divisor, fastest)', category: 'Error Diffusion (Sierra Family)', shaderValue: 9, params: algorithmParams.sierralite },
 
   // ERROR DIFFUSION (Variants)
-  { id: 'falsefloyd', name: 'False Floyd-Steinberg (3/8, 3/8, 2/8)', category: 'Error Diffusion (Variants)', shaderValue: 40 },
-  { id: 'horizontalstripe', name: 'Horizontal Stripe (vertical diffusion)', category: 'Error Diffusion (Variants)', shaderValue: 41 },
-  { id: 'verticalstripe', name: 'Vertical Stripe (horizontal diffusion)', category: 'Error Diffusion (Variants)', shaderValue: 42 },
+  { id: 'falsefloyd', name: 'False Floyd-Steinberg (3/8, 3/8, 2/8)', category: 'Error Diffusion (Variants)', shaderValue: 40, params: algorithmParams.falsefloyd },
+  { id: 'horizontalstripe', name: 'Horizontal Stripe (vertical diffusion)', category: 'Error Diffusion (Variants)', shaderValue: 41, params: algorithmParams.horizontalstripe },
+  { id: 'verticalstripe', name: 'Vertical Stripe (horizontal diffusion)', category: 'Error Diffusion (Variants)', shaderValue: 42, params: algorithmParams.verticalstripe },
 
   // ORDERED DITHERING (Bayer Matrix)
   { id: 'bayer2', name: 'Bayer 2×2 (4 levels)', category: 'Ordered Dithering (Bayer Matrix)', shaderValue: 1, params: algorithmParams.bayer2 },
-  { id: 'bayer3', name: 'Bayer 3×3 (9 levels)', category: 'Ordered Dithering (Bayer Matrix)', shaderValue: 43 },
+  { id: 'bayer3', name: 'Bayer 3×3 (9 levels)', category: 'Ordered Dithering (Bayer Matrix)', shaderValue: 43, params: algorithmParams.bayer3 },
   { id: 'bayer4', name: 'Bayer 4×4 (16 levels, recommended)', category: 'Ordered Dithering (Bayer Matrix)', shaderValue: 22, params: algorithmParams.bayer4 },
   { id: 'bayer8', name: 'Bayer 8×8 (64 levels)', category: 'Ordered Dithering (Bayer Matrix)', shaderValue: 23, params: algorithmParams.bayer8 },
   { id: 'bayer16', name: 'Bayer 16×16 (256 levels)', category: 'Ordered Dithering (Bayer Matrix)', shaderValue: 24, params: algorithmParams.bayer16 },
   { id: 'pattern4x4', name: 'Pattern 4×4 (Shader-based)', category: 'Ordered Dithering (Bayer Matrix)', shaderValue: 39, params: algorithmParams.pattern4x4 },
 
   // ORDERED DITHERING (Special Patterns)
-  { id: 'disperseddot', name: 'Dispersed Dot 3×3 (blue noise)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 44 },
-  { id: 'square5x5', name: 'Square 5×5 (digital halftone)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 45 },
-  { id: 'corner4x4', name: 'Corner 4×4 (diagonal)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 46 },
-  { id: 'blockvertical', name: 'Block Vertical 4×4', category: 'Ordered Dithering (Special Patterns)', shaderValue: 47 },
-  { id: 'blockhorizontal', name: 'Block Horizontal 4×4', category: 'Ordered Dithering (Special Patterns)', shaderValue: 48 },
-  { id: 'hatch2x2', name: 'Hatch 2×2 (line art)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 49 },
-  { id: 'hatch3x3', name: 'Hatch 3×3 (line art)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 50 },
-  { id: 'hatch4x4', name: 'Hatch 4×4 (line art)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 51 },
-  { id: 'alternate3x3', name: 'Alternate 3×3 (checkerboard)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 52 },
-  { id: 'pattern5x5', name: 'Pattern 5×5 (concentric)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 53 },
+  { id: 'disperseddot', name: 'Dispersed Dot 3×3 (blue noise)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 44, params: algorithmParams.disperseddot },
+  { id: 'square5x5', name: 'Square 5×5 (digital halftone)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 45, params: algorithmParams.square5x5 },
+  { id: 'corner4x4', name: 'Corner 4×4 (diagonal)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 46, params: algorithmParams.corner4x4 },
+  { id: 'blockvertical', name: 'Block Vertical 4×4', category: 'Ordered Dithering (Special Patterns)', shaderValue: 47, params: algorithmParams.blockvertical },
+  { id: 'blockhorizontal', name: 'Block Horizontal 4×4', category: 'Ordered Dithering (Special Patterns)', shaderValue: 48, params: algorithmParams.blockhorizontal },
+  { id: 'hatch2x2', name: 'Hatch 2×2 (line art)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 49, params: algorithmParams.hatch2x2 },
+  { id: 'hatch3x3', name: 'Hatch 3×3 (line art)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 50, params: algorithmParams.hatch3x3 },
+  { id: 'hatch4x4', name: 'Hatch 4×4 (line art)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 51, params: algorithmParams.hatch4x4 },
+  { id: 'alternate3x3', name: 'Alternate 3×3 (checkerboard)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 52, params: algorithmParams.alternate3x3 },
+  { id: 'pattern5x5', name: 'Pattern 5×5 (concentric)', category: 'Ordered Dithering (Special Patterns)', shaderValue: 53, params: algorithmParams.pattern5x5 },
 
   // HALFTONE SCREENING (Print)
   { id: 'halftone', name: 'Classic Halftone (0° angle)', category: 'Halftone Screening (Print)', shaderValue: 27, params: algorithmParams.halftone },
@@ -391,7 +401,7 @@ export const algorithms: Algorithm[] = [
   // NOISE-BASED
   { id: 'random', name: 'Random Noise (white)', category: 'Noise-Based', shaderValue: 2, params: algorithmParams.random },
   { id: 'blue', name: 'Blue Noise (poisson disk)', category: 'Noise-Based', shaderValue: 34, params: algorithmParams.blue },
-  { id: 'voidcluster', name: 'Void-and-Cluster (hybrid)', category: 'Noise-Based', shaderValue: 50 },
+  { id: 'voidcluster', name: 'Void-and-Cluster (hybrid)', category: 'Noise-Based', shaderValue: 50, params: algorithmParams.voidcluster },
   { id: 'perlin', name: 'Perlin Noise (coherent)', category: 'Noise-Based', shaderValue: 35, params: algorithmParams.perlin },
 
   // GEOMETRIC EFFECTS
@@ -406,5 +416,25 @@ export const algorithms: Algorithm[] = [
 
   // SPECIAL
   { id: 'bittone', name: 'Bit Tone (quantized)', category: 'Special', shaderValue: 11, params: algorithmParams.bittone },
-  { id: 'fan', name: 'Fan Pattern', category: 'Special', shaderValue: 38, params: algorithmParams.fan }
+  { id: 'fan', name: 'Fan Pattern', category: 'Special', shaderValue: 38, params: algorithmParams.fan },
+
+  // PHASE 2: QUALITY ENHANCEMENT ALGORITHMS
+  { id: 'adaptivethreshold', name: 'Adaptive Threshold (content-aware)', category: 'Quality Enhancement', shaderValue: 55, params: algorithmParams.adaptivethreshold },
+  { id: 'anisotropic', name: 'Anisotropic (gradient-following)', category: 'Quality Enhancement', shaderValue: 56, params: algorithmParams.anisotropic },
+  { id: 'sobeledge', name: 'Sobel Edge-Weighted (detail-preserving)', category: 'Quality Enhancement', shaderValue: 57, params: algorithmParams.sobeledge },
+
+  // PHASE 3: ADVANCED ERROR DIFFUSION
+  { id: 'riemersma', name: 'Riemersma (Hilbert curve, animation-stable)', category: 'Advanced Error Diffusion', shaderValue: 58, params: algorithmParams.riemersma },
+
+  // PHASE 4: PRINT/PROFESSIONAL EFFECTS
+  { id: 'halftonecmyk', name: 'Halftone CMYK (4-color separation)', category: 'Print/Professional', shaderValue: 59, params: algorithmParams.halftonecmyk },
+  { id: 'hexagonal', name: 'Hexagonal Grid (honeycomb, optimal packing)', category: 'Print/Professional', shaderValue: 60, params: algorithmParams.hexagonal },
+
+  // PHASE 5: CREATIVE/ARTISTIC EFFECTS
+  { id: 'thresholdmap', name: 'Threshold Map (custom artistic patterns)', category: 'Creative/Artistic', shaderValue: 61, params: algorithmParams.thresholdmap },
+  { id: 'kuwahara', name: 'Kuwahara Filter (painterly effect)', category: 'Creative/Artistic', shaderValue: 62, params: algorithmParams.kuwahara },
+  { id: 'displacement', name: 'Dither Displacement (position distortion)', category: 'Creative/Artistic', shaderValue: 63, params: algorithmParams.displacement },
+  { id: 'reactiondiffusion', name: 'Reaction-Diffusion (organic patterns)', category: 'Creative/Artistic', shaderValue: 64, params: algorithmParams.reactiondiffusion },
+  { id: 'morphology', name: 'Dither Morphology (erode/dilate)', category: 'Creative/Artistic', shaderValue: 65, params: algorithmParams.morphology },
+  { id: 'multiscale', name: 'Multi-Scale (layered patterns)', category: 'Creative/Artistic', shaderValue: 66, params: algorithmParams.multiscale }
 ];

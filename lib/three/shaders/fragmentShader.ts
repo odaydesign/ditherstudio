@@ -42,10 +42,35 @@ export const fragmentShader = `
                     uniform float uPixelAspectRatio;
                     uniform float uCRTEffect;
 
+                    // CRT Display Effects
+                    uniform float uScanlines;
+                    uniform bool uPhosphor;
+                    uniform float uCurvature;
+                    uniform float uVignette;
+                    uniform float uChromatic;
+                    uniform float uBloom;
+
+                    // Video/Animation
+                    uniform bool uFrameBlending;
+                    uniform float uFrameBlendStrength;
+                    uniform bool uMotionAdaptive;
+                    uniform float uMotionSensitivity;
+                    uniform float uTemporalStability;
+
                     varying vec2 vUv;
 
                     float hash(vec2 p) {
                         return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+                    }
+
+                    // Helper functions - must be declared early
+                    float toGray(vec3 color) {
+                        return dot(color, vec3(0.299, 0.587, 0.114));
+                    }
+
+                    vec3 quantize(vec3 color, int levels) {
+                        float step = 1.0 / float(levels - 1);
+                        return floor(color / step + 0.5) * step;
                     }
 
                     // Apply pattern randomization and temporal dithering to reduce banding
@@ -484,19 +509,94 @@ export const fragmentShader = `
                         return centered + 0.5;
                     }
 
-                    // Subtle CRT simulation (scanlines + slight curvature)
+                    // Screen curvature distortion
+                    vec2 applyCurvature(vec2 uv, float amount) {
+                        if (amount <= 0.0) return uv;
+                        vec2 centered = uv - 0.5;
+                        float dist = dot(centered, centered);
+                        centered *= 1.0 + dist * amount;
+                        return centered + 0.5;
+                    }
+
+                    // Comprehensive CRT simulation
                     vec3 applyCRTEffect(vec3 color, vec2 uv, float strength) {
-                        if (strength <= 0.0) return color;
+                        vec3 result = color;
+                        vec2 curvedUV = uv;
+
+                        // Apply screen curvature
+                        if (uCurvature > 0.0) {
+                            curvedUV = applyCurvature(uv, uCurvature);
+                            // Clip to screen bounds
+                            if (curvedUV.x < 0.0 || curvedUV.x > 1.0 || curvedUV.y < 0.0 || curvedUV.y > 1.0) {
+                                return vec3(0.0);
+                            }
+                        }
+
+                        // Chromatic aberration
+                        if (uChromatic > 0.0) {
+                            vec2 center = curvedUV - 0.5;
+                            float dist = length(center);
+                            vec2 offset = center * dist * uChromatic;
+                            result.r = texture2D(tDiffuse, curvedUV + offset).r;
+                            result.b = texture2D(tDiffuse, curvedUV - offset).b;
+                        }
 
                         // Scanlines
-                        float scanline = sin(uv.y * uResolution.y * 3.14159) * 0.5 + 0.5;
-                        scanline = mix(1.0, scanline, strength * 0.3);
+                        if (uScanlines > 0.0) {
+                            float scanline = sin(curvedUV.y * uResolution.y * 3.14159) * 0.5 + 0.5;
+                            scanline = mix(1.0, scanline, uScanlines * 0.5);
+                            result *= scanline;
+                        }
 
-                        // Slight vignette
-                        vec2 center = uv - 0.5;
-                        float vignette = 1.0 - dot(center, center) * strength;
+                        // RGB Phosphor (sub-pixel rendering)
+                        if (uPhosphor) {
+                            float pixelX = mod(curvedUV.x * uResolution.x, 3.0);
+                            vec3 phosphorMask;
+                            if (pixelX < 1.0) {
+                                phosphorMask = vec3(1.0, 0.3, 0.3);
+                            } else if (pixelX < 2.0) {
+                                phosphorMask = vec3(0.3, 1.0, 0.3);
+                            } else {
+                                phosphorMask = vec3(0.3, 0.3, 1.0);
+                            }
+                            result *= phosphorMask * 1.5;
+                        }
 
-                        return color * scanline * vignette;
+                        // Vignette
+                        if (uVignette > 0.0) {
+                            vec2 center = curvedUV - 0.5;
+                            float vignetteAmount = 1.0 - dot(center, center) * uVignette * 2.0;
+                            vignetteAmount = clamp(vignetteAmount, 0.0, 1.0);
+                            result *= vignetteAmount;
+                        }
+
+                        // Bloom/Glow
+                        if (uBloom > 0.0) {
+                            vec3 bloomColor = vec3(0.0);
+                            float bloomSamples = 0.0;
+                            for (float x = -2.0; x <= 2.0; x += 1.0) {
+                                for (float y = -2.0; y <= 2.0; y += 1.0) {
+                                    vec2 offset = vec2(x, y) / uResolution * 3.0;
+                                    bloomColor += texture2D(tDiffuse, curvedUV + offset).rgb;
+                                    bloomSamples += 1.0;
+                                }
+                            }
+                            bloomColor /= bloomSamples;
+                            // Only add bloom to bright areas
+                            float brightness = dot(bloomColor, vec3(0.299, 0.587, 0.114));
+                            result += bloomColor * uBloom * brightness;
+                        }
+
+                        // Legacy CRT effect (combines with new effects)
+                        if (strength > 0.0) {
+                            float legacyScanline = sin(curvedUV.y * uResolution.y * 3.14159) * 0.5 + 0.5;
+                            legacyScanline = mix(1.0, legacyScanline, strength * 0.3);
+                            vec2 center = curvedUV - 0.5;
+                            float legacyVignette = 1.0 - dot(center, center) * strength;
+                            result *= legacyScanline * legacyVignette;
+                        }
+
+                        return result;
                     }
 
                     // Find two closest colors by hue
@@ -532,6 +632,11 @@ export const fragmentShader = `
 
                     // Edge-aware adaptive dithering strength
                     float getAdaptiveDitherStrength(vec2 uv) {
+                        // If edge preservation is disabled, return 1.0
+                        if (uEdgePreservation <= 0.0) {
+                            return 1.0;
+                        }
+
                         vec2 texel = 1.0 / uResolution;
 
                         // Sample neighborhood for edge detection
@@ -550,7 +655,9 @@ export const fragmentShader = `
                         variance *= 0.25;
 
                         // Less dithering on edges (preserve detail), more on flat areas
-                        return mix(0.5, 1.5, smoothstep(0.0, 0.3, variance));
+                        // Scale the effect by uEdgePreservation (0-1)
+                        float edgeEffect = mix(0.5, 1.5, smoothstep(0.0, 0.3, variance));
+                        return mix(1.0, edgeEffect, uEdgePreservation);
                     }
 
                     // Subpixel-accurate dither pattern sampling
@@ -661,21 +768,349 @@ export const fragmentShader = `
                         return bayer8(randomized * 0.5 / uParam1) * 0.25 + bayer8(randomized / uParam1) * 0.75 * uParam2;
                     }
 
-                    // Error diffusion (approximation with noise + serpentine)
-                    float errorDiffusion(vec2 coord, float diffusion) {
-                        vec2 adjustedCoord = coord;
+                    // ============================================================
+                    // ERROR DIFFUSION ALGORITHMS
+                    // Each uses different noise characteristics to approximate
+                    // the visual appearance of true error diffusion
+                    // ============================================================
 
-                        // Serpentine scanning: reverse direction on odd rows
+                    // Helper: Serpentine-aware coordinate adjustment
+                    vec2 serpentineCoord(vec2 coord) {
+                        vec2 adjustedCoord = coord;
                         if (uSerpentine) {
                             float row = floor(coord.y);
                             if (mod(row, 2.0) > 0.5) {
-                                // Odd row - reverse X direction
                                 adjustedCoord.x = uResolution.x - coord.x;
                             }
                         }
+                        return adjustedCoord;
+                    }
 
-                        float n = hash(adjustedCoord) * 2.0 - 1.0;
-                        return uThreshold + n * 0.1 * diffusion;
+                    // ============================================================
+                    // ERROR DIFFUSION ALGORITHMS
+                    // ============================================================
+                    // These use texture sampling with exact diffusion weights to simulate
+                    // the neighborhood-aware error diffusion effect. Each algorithm samples
+                    // the actual image at specific neighbor positions weighted by the
+                    // documented diffusion coefficients.
+
+                    // Helper: Sample luminance from texture at pixel offset
+                    float sampleLum(vec2 uv, vec2 offset) {
+                        vec2 texel = 1.0 / uResolution;
+                        vec3 col = texture2D(tDiffuse, uv + offset * texel).rgb;
+                        return dot(col, vec3(0.299, 0.587, 0.114));
+                    }
+
+                    // Floyd-Steinberg (1976): divisor 16
+                    // Matrix:     X  7
+                    //          3  5  1
+                    // Exact coefficients: 7/16, 3/16, 5/16, 1/16
+                    float floydSteinberg(vec2 coord, float diffusion) {
+                        vec2 uv = coord / uResolution;
+                        vec2 texel = 1.0 / uResolution;
+
+                        // Sample neighbors with Floyd-Steinberg weights
+                        float center = sampleLum(uv, vec2(0.0, 0.0));
+                        float right = sampleLum(uv, vec2(1.0, 0.0));
+                        float bottomLeft = sampleLum(uv, vec2(-1.0, 1.0));
+                        float bottom = sampleLum(uv, vec2(0.0, 1.0));
+                        float bottomRight = sampleLum(uv, vec2(1.0, 1.0));
+
+                        // Weighted neighborhood - simulates error spreading from neighbors
+                        float neighborInfluence = (right * 7.0 + bottomLeft * 3.0 + bottom * 5.0 + bottomRight * 1.0) / 16.0;
+
+                        // Compute threshold based on local neighborhood variance
+                        float localVar = abs(center - neighborInfluence);
+                        float threshold = uThreshold + (hash(coord) - 0.5) * 0.15 * diffusion;
+                        threshold += (neighborInfluence - center) * 0.3 * diffusion;
+
+                        return threshold;
+                    }
+
+                    // Atkinson (1984): divisor 8, only 75% error diffused
+                    // Matrix:     X  1  1
+                    //          1  1  1
+                    //             1
+                    // Bill Atkinson's algorithm for Macintosh - high contrast, crisp look
+                    float atkinson(vec2 coord, float diffusion) {
+                        vec2 uv = coord / uResolution;
+
+                        // Sample 6 neighbors each at 1/8 (only 6/8 = 75% error diffused)
+                        float center = sampleLum(uv, vec2(0.0, 0.0));
+                        float n1 = sampleLum(uv, vec2(1.0, 0.0));   // right
+                        float n2 = sampleLum(uv, vec2(2.0, 0.0));   // right+1
+                        float n3 = sampleLum(uv, vec2(-1.0, 1.0));  // bottom-left
+                        float n4 = sampleLum(uv, vec2(0.0, 1.0));   // bottom
+                        float n5 = sampleLum(uv, vec2(1.0, 1.0));   // bottom-right
+                        float n6 = sampleLum(uv, vec2(0.0, 2.0));   // bottom+1
+
+                        // Only 75% of error is diffused - this creates the high-contrast Mac look
+                        float neighborAvg = (n1 + n2 + n3 + n4 + n5 + n6) / 6.0;
+                        float errorFactor = (neighborAvg - center) * 0.75;
+
+                        // Atkinson pushes toward extremes - reduce midtones
+                        float threshold = uThreshold + (hash(coord) - 0.5) * 0.1 * diffusion;
+                        threshold += errorFactor * 0.4 * diffusion;
+
+                        // High contrast adjustment - Atkinson's signature look
+                        if (center > 0.25 && center < 0.75) {
+                            threshold += (center - 0.5) * 0.2;
+                        }
+
+                        return threshold;
+                    }
+
+                    // Jarvis-Judice-Ninke (1976): divisor 48, 12 neighbors over 3 rows
+                    // Matrix:        X  7  5
+                    //          3  5  7  5  3
+                    //          1  3  5  3  1
+                    // Smoother gradients due to wider error spread
+                    float jarvis(vec2 coord, float diffusion) {
+                        vec2 uv = coord / uResolution;
+
+                        float center = sampleLum(uv, vec2(0.0, 0.0));
+
+                        // Row 0: X 7 5
+                        float r0_1 = sampleLum(uv, vec2(1.0, 0.0)) * 7.0;
+                        float r0_2 = sampleLum(uv, vec2(2.0, 0.0)) * 5.0;
+
+                        // Row 1: 3 5 7 5 3
+                        float r1_m2 = sampleLum(uv, vec2(-2.0, 1.0)) * 3.0;
+                        float r1_m1 = sampleLum(uv, vec2(-1.0, 1.0)) * 5.0;
+                        float r1_0 = sampleLum(uv, vec2(0.0, 1.0)) * 7.0;
+                        float r1_1 = sampleLum(uv, vec2(1.0, 1.0)) * 5.0;
+                        float r1_2 = sampleLum(uv, vec2(2.0, 1.0)) * 3.0;
+
+                        // Row 2: 1 3 5 3 1
+                        float r2_m2 = sampleLum(uv, vec2(-2.0, 2.0)) * 1.0;
+                        float r2_m1 = sampleLum(uv, vec2(-1.0, 2.0)) * 3.0;
+                        float r2_0 = sampleLum(uv, vec2(0.0, 2.0)) * 5.0;
+                        float r2_1 = sampleLum(uv, vec2(1.0, 2.0)) * 3.0;
+                        float r2_2 = sampleLum(uv, vec2(2.0, 2.0)) * 1.0;
+
+                        float neighborSum = (r0_1 + r0_2 + r1_m2 + r1_m1 + r1_0 + r1_1 + r1_2 + r2_m2 + r2_m1 + r2_0 + r2_1 + r2_2) / 48.0;
+
+                        float threshold = uThreshold + (hash(coord) - 0.5) * 0.08 * diffusion;
+                        threshold += (neighborSum - center) * 0.35 * diffusion;
+
+                        return threshold;
+                    }
+
+                    // Stucki (1981): divisor 42, sharper than Jarvis
+                    // Matrix:        X  8  4
+                    //          2  4  8  4  2
+                    //          1  2  4  2  1
+                    float stucki(vec2 coord, float diffusion) {
+                        vec2 uv = coord / uResolution;
+
+                        float center = sampleLum(uv, vec2(0.0, 0.0));
+
+                        // Row 0: X 8 4
+                        float r0_1 = sampleLum(uv, vec2(1.0, 0.0)) * 8.0;
+                        float r0_2 = sampleLum(uv, vec2(2.0, 0.0)) * 4.0;
+
+                        // Row 1: 2 4 8 4 2
+                        float r1_m2 = sampleLum(uv, vec2(-2.0, 1.0)) * 2.0;
+                        float r1_m1 = sampleLum(uv, vec2(-1.0, 1.0)) * 4.0;
+                        float r1_0 = sampleLum(uv, vec2(0.0, 1.0)) * 8.0;
+                        float r1_1 = sampleLum(uv, vec2(1.0, 1.0)) * 4.0;
+                        float r1_2 = sampleLum(uv, vec2(2.0, 1.0)) * 2.0;
+
+                        // Row 2: 1 2 4 2 1
+                        float r2_m2 = sampleLum(uv, vec2(-2.0, 2.0)) * 1.0;
+                        float r2_m1 = sampleLum(uv, vec2(-1.0, 2.0)) * 2.0;
+                        float r2_0 = sampleLum(uv, vec2(0.0, 2.0)) * 4.0;
+                        float r2_1 = sampleLum(uv, vec2(1.0, 2.0)) * 2.0;
+                        float r2_2 = sampleLum(uv, vec2(2.0, 2.0)) * 1.0;
+
+                        float neighborSum = (r0_1 + r0_2 + r1_m2 + r1_m1 + r1_0 + r1_1 + r1_2 + r2_m2 + r2_m1 + r2_0 + r2_1 + r2_2) / 42.0;
+
+                        float threshold = uThreshold + (hash(coord) - 0.5) * 0.09 * diffusion;
+                        threshold += (neighborSum - center) * 0.38 * diffusion;
+
+                        return threshold;
+                    }
+
+                    // Burkes (1988): divisor 32, simplified 2-row kernel
+                    // Matrix:        X  8  4
+                    //          2  4  8  4  2
+                    // Faster than Stucki with similar quality
+                    float burkes(vec2 coord, float diffusion) {
+                        vec2 uv = coord / uResolution;
+
+                        float center = sampleLum(uv, vec2(0.0, 0.0));
+
+                        // Row 0: X 8 4
+                        float r0_1 = sampleLum(uv, vec2(1.0, 0.0)) * 8.0;
+                        float r0_2 = sampleLum(uv, vec2(2.0, 0.0)) * 4.0;
+
+                        // Row 1: 2 4 8 4 2
+                        float r1_m2 = sampleLum(uv, vec2(-2.0, 1.0)) * 2.0;
+                        float r1_m1 = sampleLum(uv, vec2(-1.0, 1.0)) * 4.0;
+                        float r1_0 = sampleLum(uv, vec2(0.0, 1.0)) * 8.0;
+                        float r1_1 = sampleLum(uv, vec2(1.0, 1.0)) * 4.0;
+                        float r1_2 = sampleLum(uv, vec2(2.0, 1.0)) * 2.0;
+
+                        float neighborSum = (r0_1 + r0_2 + r1_m2 + r1_m1 + r1_0 + r1_1 + r1_2) / 32.0;
+
+                        float threshold = uThreshold + (hash(coord) - 0.5) * 0.1 * diffusion;
+                        threshold += (neighborSum - center) * 0.4 * diffusion;
+
+                        return threshold;
+                    }
+
+                    // Sierra Full (1989): divisor 32, 3-row kernel
+                    // Matrix:        X  5  3
+                    //          2  4  5  4  2
+                    //             2  3  2
+                    float sierra(vec2 coord, float diffusion) {
+                        vec2 uv = coord / uResolution;
+
+                        float center = sampleLum(uv, vec2(0.0, 0.0));
+
+                        // Row 0: X 5 3
+                        float r0_1 = sampleLum(uv, vec2(1.0, 0.0)) * 5.0;
+                        float r0_2 = sampleLum(uv, vec2(2.0, 0.0)) * 3.0;
+
+                        // Row 1: 2 4 5 4 2
+                        float r1_m2 = sampleLum(uv, vec2(-2.0, 1.0)) * 2.0;
+                        float r1_m1 = sampleLum(uv, vec2(-1.0, 1.0)) * 4.0;
+                        float r1_0 = sampleLum(uv, vec2(0.0, 1.0)) * 5.0;
+                        float r1_1 = sampleLum(uv, vec2(1.0, 1.0)) * 4.0;
+                        float r1_2 = sampleLum(uv, vec2(2.0, 1.0)) * 2.0;
+
+                        // Row 2: 2 3 2 (centered)
+                        float r2_m1 = sampleLum(uv, vec2(-1.0, 2.0)) * 2.0;
+                        float r2_0 = sampleLum(uv, vec2(0.0, 2.0)) * 3.0;
+                        float r2_1 = sampleLum(uv, vec2(1.0, 2.0)) * 2.0;
+
+                        float neighborSum = (r0_1 + r0_2 + r1_m2 + r1_m1 + r1_0 + r1_1 + r1_2 + r2_m1 + r2_0 + r2_1) / 32.0;
+
+                        float threshold = uThreshold + (hash(coord) - 0.5) * 0.1 * diffusion;
+                        threshold += (neighborSum - center) * 0.35 * diffusion;
+
+                        return threshold;
+                    }
+
+                    // Two-Row Sierra (1990): divisor 16
+                    // Matrix:        X  4  3
+                    //          1  2  3  2  1
+                    float sierra2Row(vec2 coord, float diffusion) {
+                        vec2 uv = coord / uResolution;
+
+                        float center = sampleLum(uv, vec2(0.0, 0.0));
+
+                        // Row 0: X 4 3
+                        float r0_1 = sampleLum(uv, vec2(1.0, 0.0)) * 4.0;
+                        float r0_2 = sampleLum(uv, vec2(2.0, 0.0)) * 3.0;
+
+                        // Row 1: 1 2 3 2 1
+                        float r1_m2 = sampleLum(uv, vec2(-2.0, 1.0)) * 1.0;
+                        float r1_m1 = sampleLum(uv, vec2(-1.0, 1.0)) * 2.0;
+                        float r1_0 = sampleLum(uv, vec2(0.0, 1.0)) * 3.0;
+                        float r1_1 = sampleLum(uv, vec2(1.0, 1.0)) * 2.0;
+                        float r1_2 = sampleLum(uv, vec2(2.0, 1.0)) * 1.0;
+
+                        float neighborSum = (r0_1 + r0_2 + r1_m2 + r1_m1 + r1_0 + r1_1 + r1_2) / 16.0;
+
+                        float threshold = uThreshold + (hash(coord) - 0.5) * 0.11 * diffusion;
+                        threshold += (neighborSum - center) * 0.4 * diffusion;
+
+                        return threshold;
+                    }
+
+                    // Sierra Lite (1990): divisor 4
+                    // Matrix:   X  2
+                    //          1  1
+                    // Fastest Sierra variant, similar quality to Floyd-Steinberg
+                    float sierraLiteDither(vec2 coord, float diffusion) {
+                        vec2 uv = coord / uResolution;
+
+                        float center = sampleLum(uv, vec2(0.0, 0.0));
+
+                        // Simple 3-neighbor kernel
+                        float right = sampleLum(uv, vec2(1.0, 0.0)) * 2.0;
+                        float bottomLeft = sampleLum(uv, vec2(-1.0, 1.0)) * 1.0;
+                        float bottom = sampleLum(uv, vec2(0.0, 1.0)) * 1.0;
+
+                        float neighborSum = (right + bottomLeft + bottom) / 4.0;
+
+                        float threshold = uThreshold + (hash(coord) - 0.5) * 0.12 * diffusion;
+                        threshold += (neighborSum - center) * 0.45 * diffusion;
+
+                        return threshold;
+                    }
+
+                    // False Floyd-Steinberg: Simplified 3-neighbor
+                    // Matrix:   X  3
+                    //          3  2
+                    // Divisor: 8
+                    float falseFloydSteinberg(vec2 coord, float diffusion) {
+                        vec2 uv = coord / uResolution;
+
+                        float center = sampleLum(uv, vec2(0.0, 0.0));
+
+                        float right = sampleLum(uv, vec2(1.0, 0.0)) * 3.0;
+                        float bottom = sampleLum(uv, vec2(0.0, 1.0)) * 3.0;
+                        float bottomRight = sampleLum(uv, vec2(1.0, 1.0)) * 2.0;
+
+                        float neighborSum = (right + bottom + bottomRight) / 8.0;
+
+                        float threshold = uThreshold + (hash(coord) - 0.5) * 0.13 * diffusion;
+                        threshold += (neighborSum - center) * 0.42 * diffusion;
+
+                        return threshold;
+                    }
+
+                    // Horizontal Stripe Dithering
+                    // Error diffuses only to bottom rows - creates horizontal bands
+                    float horizontalStripe(vec2 coord, float diffusion) {
+                        vec2 uv = coord / uResolution;
+
+                        float center = sampleLum(uv, vec2(0.0, 0.0));
+
+                        // Only sample below - creates horizontal banding
+                        float b1 = sampleLum(uv, vec2(0.0, 1.0));
+                        float b2 = sampleLum(uv, vec2(0.0, 2.0));
+                        float b3 = sampleLum(uv, vec2(0.0, 3.0));
+
+                        float neighborSum = (b1 * 4.0 + b2 * 2.0 + b3 * 1.0) / 7.0;
+
+                        float threshold = uThreshold + (hash(coord) - 0.5) * 0.1 * diffusion;
+                        threshold += (neighborSum - center) * 0.5 * diffusion;
+
+                        // Add slight row-based variation for band effect
+                        threshold += sin(coord.y * 0.5) * 0.05;
+
+                        return threshold;
+                    }
+
+                    // Vertical Stripe Dithering
+                    // Error diffuses only to right columns - creates vertical bands
+                    float verticalStripe(vec2 coord, float diffusion) {
+                        vec2 uv = coord / uResolution;
+
+                        float center = sampleLum(uv, vec2(0.0, 0.0));
+
+                        // Only sample to the right - creates vertical banding
+                        float r1 = sampleLum(uv, vec2(1.0, 0.0));
+                        float r2 = sampleLum(uv, vec2(2.0, 0.0));
+                        float r3 = sampleLum(uv, vec2(3.0, 0.0));
+
+                        float neighborSum = (r1 * 4.0 + r2 * 2.0 + r3 * 1.0) / 7.0;
+
+                        float threshold = uThreshold + (hash(coord) - 0.5) * 0.1 * diffusion;
+                        threshold += (neighborSum - center) * 0.5 * diffusion;
+
+                        // Add slight column-based variation for band effect
+                        threshold += sin(coord.x * 0.5) * 0.05;
+
+                        return threshold;
+                    }
+
+                    // Legacy generic error diffusion for backward compatibility
+                    float errorDiffusion(vec2 coord, float diffusion) {
+                        return floydSteinberg(coord, diffusion);
                     }
 
                     // Ostromoukhov variable error diffusion coefficients
@@ -1012,7 +1447,7 @@ export const fragmentShader = `
                     }
 
                     float sierraLite(vec2 coord) {
-                        return errorDiffusion(coord, uParam1 * 0.8);
+                        return sierraLiteDither(coord, uParam1 * 0.8);
                     }
 
                     // ============================================================
@@ -1051,33 +1486,535 @@ export const fragmentShader = `
                     float posterizeDither(vec2 coord, vec3 color) {
                         float colorLevels = uParam1;
                         float ditherBoundaries = uParam2;
-                        
+
                         // Quantize color to levels
                         float gray = toGray(color);
                         float step = 1.0 / colorLevels;
                         float quantized = floor(gray / step) * step;
-                        
+
                         // Calculate distance to nearest boundary
                         float distToBoundary = abs(gray - quantized);
                         float boundaryMask = smoothstep(0.0, step * 0.5, distToBoundary);
-                        
+
                         // Apply dither only near boundaries
                         float baseDither = bayer4(coord);
                         return mix(0.5, baseDither, boundaryMask * ditherBoundaries);
+                    }
+
+                    // ============================================================
+                    // PHASE 2: QUALITY ENHANCEMENT ALGORITHMS
+                    // ============================================================
+
+                    // Adaptive Threshold Dithering - Threshold varies based on local image content
+                    float adaptiveThresholdDither(vec2 coord) {
+                        vec2 uv = coord / uResolution;
+                        float windowSize = uParam1; // Adaptive window size (e.g., 5.0 - 15.0)
+                        float sensitivity = uParam2; // How much to adapt (0.0 - 1.0)
+
+                        // Calculate local mean intensity
+                        float localMean = 0.0;
+                        float samples = 0.0;
+                        int halfWindow = int(windowSize * 0.5);
+
+                        for (int y = -halfWindow; y <= halfWindow; y++) {
+                            for (int x = -halfWindow; x <= halfWindow; x++) {
+                                vec2 offset = vec2(float(x), float(y)) / uResolution;
+                                vec3 texSample = texture2D(tDiffuse, uv + offset).rgb;
+                                localMean += toGray(texSample);
+                                samples += 1.0;
+                            }
+                        }
+                        localMean /= samples;
+
+                        // Calculate adaptive threshold
+                        // In bright areas, raise threshold; in dark areas, lower it
+                        float basePattern = bayer8(coord);
+                        float adaptiveOffset = (localMean - 0.5) * sensitivity;
+
+                        return clamp(basePattern + adaptiveOffset, 0.0, 1.0);
+                    }
+
+                    // Anisotropic Dithering - Directional dithering following image gradients
+                    float anisotropicDither(vec2 coord) {
+                        vec2 uv = coord / uResolution;
+                        float directionality = uParam1; // How much to follow gradients (0.0 - 1.0)
+                        float scale = uParam2; // Pattern scale
+
+                        // Calculate image gradient
+                        vec2 texel = 1.0 / uResolution;
+                        vec3 colorCenter = texture2D(tDiffuse, uv).rgb;
+                        vec3 colorRight = texture2D(tDiffuse, uv + vec2(texel.x, 0.0)).rgb;
+                        vec3 colorDown = texture2D(tDiffuse, uv + vec2(0.0, texel.y)).rgb;
+
+                        float grayCenter = toGray(colorCenter);
+                        float grayRight = toGray(colorRight);
+                        float grayDown = toGray(colorDown);
+
+                        // Gradient vector
+                        vec2 gradient = vec2(grayRight - grayCenter, grayDown - grayCenter);
+                        float gradientMag = length(gradient);
+
+                        // Rotate dither pattern based on gradient direction
+                        float angle = atan(gradient.y, gradient.x);
+                        vec2 rotatedCoord;
+
+                        if (gradientMag > 0.01) {
+                            // Apply rotation based on gradient
+                            float cosA = cos(angle * directionality);
+                            float sinA = sin(angle * directionality);
+                            rotatedCoord = vec2(
+                                coord.x * cosA - coord.y * sinA,
+                                coord.x * sinA + coord.y * cosA
+                            );
+                        } else {
+                            // No gradient, use regular coordinates
+                            rotatedCoord = coord;
+                        }
+
+                        // Apply line pattern along gradient direction
+                        float pattern = fract(rotatedCoord.y / scale);
+
+                        // Blend with base dither for variety
+                        float baseDither = bayer4(coord);
+                        return mix(baseDither, pattern, directionality * gradientMag * 10.0);
+                    }
+
+                    // Sobel Edge-Weighted Dithering - Less dithering on edges, more in flat areas
+                    float sobelEdgeWeightedDither(vec2 coord) {
+                        vec2 uv = coord / uResolution;
+                        float edgePreservation = uParam1; // How much to preserve edges (0.0 - 1.0)
+                        float flatBoost = uParam2; // Boost dithering in flat areas (1.0 - 3.0)
+
+                        // Detect edges using Sobel operator
+                        float edgeStrength = detectEdge(uv, tDiffuse);
+
+                        // Generate base dither pattern
+                        float baseDither = bayer8(coord);
+
+                        // Weight dithering inversely to edge strength
+                        // Strong edges → less dithering (preserve detail)
+                        // Flat areas → more dithering (reduce banding)
+                        float edgeMask = 1.0 - smoothstep(0.0, 0.3, edgeStrength);
+                        float ditherStrength = mix(1.0, edgeMask * flatBoost, edgePreservation);
+
+                        // Apply weighted dithering
+                        return mix(0.5, baseDither, ditherStrength);
+                    }
+
+                    // ============================================================
+                    // PHASE 3: ADVANCED ERROR DIFFUSION
+                    // ============================================================
+
+                    // Riemersma Dithering - Space-filling curve (Hilbert) error diffusion
+                    // Produces temporally stable dithering, great for animation
+                    float riemersmaDither(vec2 coord) {
+                        // Simplified Hilbert curve approximation
+                        // True implementation would require recursive curve generation
+                        float scale = uParam1; // Curve scale (2.0 - 16.0)
+                        float errorWeight = uParam2; // Error diffusion weight (0.1 - 1.0)
+
+                        // Approximate Hilbert curve using recursive pattern
+                        vec2 p = coord / scale;
+                        vec2 hilbertCoord = p;
+
+                        // Apply multiple iterations of Hilbert transform
+                        for (int i = 0; i < 4; i++) {
+                            vec2 quadrant = mod(hilbertCoord, 2.0);
+
+                            // Hilbert curve rotation based on quadrant
+                            if (quadrant.x < 1.0 && quadrant.y < 1.0) {
+                                // Bottom-left: rotate 90° CCW
+                                hilbertCoord = vec2(hilbertCoord.y, hilbertCoord.x);
+                            } else if (quadrant.x >= 1.0 && quadrant.y >= 1.0) {
+                                // Top-right: rotate 90° CW
+                                hilbertCoord = vec2(2.0 - hilbertCoord.y, 2.0 - hilbertCoord.x);
+                            }
+
+                            hilbertCoord *= 0.5;
+                        }
+
+                        // Generate threshold based on position along curve
+                        float curvePosition = hilbertCoord.x + hilbertCoord.y;
+
+                        // Add error diffusion approximation
+                        float error = hash(floor(coord / scale)) * 2.0 - 1.0;
+                        float threshold = fract(curvePosition) + error * errorWeight * 0.1;
+
+                        return clamp(threshold, 0.0, 1.0);
+                    }
+
+                    // ============================================================
+                    // PHASE 4: PRINT/PROFESSIONAL EFFECTS
+                    // ============================================================
+
+                    // Halftone CMYK Separation - Simulates 4-color printing process
+                    float halftoneCMYK(vec2 coord) {
+                        // Screen angles for CMYK (industry standard)
+                        float angleC = 0.2618; // 15°
+                        float angleM = 1.3090; // 75°
+                        float angleY = 0.0;    // 0°
+                        float angleK = 0.7854; // 45°
+
+                        float dotSize = uParam1; // Dot size (4.0 - 20.0)
+                        float separation = uParam2; // Color separation visibility (0.0 - 1.0)
+
+                        // Sample color
+                        vec3 rgb = texture2D(tDiffuse, coord / uResolution).rgb;
+
+                        // Convert to CMYK
+                        float k = 1.0 - max(max(rgb.r, rgb.g), rgb.b);
+                        float c = (1.0 - rgb.r - k) / (1.0 - k + 0.001);
+                        float m = (1.0 - rgb.g - k) / (1.0 - k + 0.001);
+                        float y = (1.0 - rgb.b - k) / (1.0 - k + 0.001);
+
+                        // Generate halftone patterns for each channel
+                        float patternC = halftone(coord);
+
+                        // Rotate coordinates for each channel
+                        vec2 rotatedM = vec2(
+                            coord.x * cos(angleM) - coord.y * sin(angleM),
+                            coord.x * sin(angleM) + coord.y * cos(angleM)
+                        );
+                        vec2 rotatedY = vec2(
+                            coord.x * cos(angleY) - coord.y * sin(angleY),
+                            coord.x * sin(angleY) + coord.y * cos(angleY)
+                        );
+                        vec2 rotatedK = vec2(
+                            coord.x * cos(angleK) - coord.y * sin(angleK),
+                            coord.x * sin(angleK) + coord.y * cos(angleK)
+                        );
+
+                        // Sample each channel's halftone
+                        vec2 nearestC = floor(coord / dotSize) * dotSize + dotSize * 0.5;
+                        vec2 nearestM = floor(rotatedM / dotSize) * dotSize + dotSize * 0.5;
+                        vec2 nearestY = floor(rotatedY / dotSize) * dotSize + dotSize * 0.5;
+                        vec2 nearestK = floor(rotatedK / dotSize) * dotSize + dotSize * 0.5;
+
+                        float distC = distance(coord, nearestC);
+                        float distM = distance(rotatedM, nearestM);
+                        float distY = distance(rotatedY, nearestY);
+                        float distK = distance(rotatedK, nearestK);
+
+                        // Create dot patterns based on CMYK values
+                        float dotC = smoothstep(dotSize * c * 0.5, 0.0, distC);
+                        float dotM = smoothstep(dotSize * m * 0.5, 0.0, distM);
+                        float dotY = smoothstep(dotSize * y * 0.5, 0.0, distY);
+                        float dotK = smoothstep(dotSize * k * 0.5, 0.0, distK);
+
+                        // Combine CMYK dots (simplified - just using grayscale for now)
+                        return (dotC + dotM + dotY + dotK) * 0.25;
+                    }
+
+                    // Hexagonal Grid Dithering - Honeycomb pattern, optimal packing
+                    float hexagonalDither(vec2 coord) {
+                        float hexSize = uParam1; // Hexagon size (5.0 - 30.0)
+                        float dotIntensity = uParam2; // Dot intensity (0.5 - 2.0)
+
+                        // Hexagonal grid coordinates
+                        float hexWidth = hexSize * sqrt(3.0);
+                        float hexHeight = hexSize * 1.5;
+
+                        // Convert to hexagonal coordinates
+                        vec2 hexCoord;
+                        hexCoord.y = coord.y / hexHeight;
+                        float rowOffset = mod(floor(hexCoord.y), 2.0) * hexWidth * 0.5;
+                        hexCoord.x = (coord.x - rowOffset) / hexWidth;
+
+                        // Find nearest hexagon center
+                        vec2 gridPos = floor(hexCoord);
+                        vec2 gridFract = fract(hexCoord);
+
+                        // Check 3 nearest hexagons
+                        float minDist = 999.0;
+                        vec2 nearestHex = gridPos;
+
+                        for (float dy = 0.0; dy <= 1.0; dy += 1.0) {
+                            for (float dx = 0.0; dx <= 1.0; dx += 1.0) {
+                                vec2 testHex = gridPos + vec2(dx, dy);
+                                vec2 hexCenter = testHex + vec2(0.5);
+
+                                // Convert back to pixel space
+                                float testRowOffset = mod(testHex.y, 2.0) * 0.5;
+                                vec2 pixelCenter = vec2(
+                                    (testHex.x + testRowOffset + 0.5) * hexWidth,
+                                    (testHex.y + 0.5) * hexHeight
+                                );
+
+                                float dist = distance(coord, pixelCenter);
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    nearestHex = testHex;
+                                }
+                            }
+                        }
+
+                        // Sample image at hexagon center
+                        float testRowOffset = mod(nearestHex.y, 2.0) * 0.5;
+                        vec2 hexPixelCenter = vec2(
+                            (nearestHex.x + testRowOffset + 0.5) * hexWidth,
+                            (nearestHex.y + 0.5) * hexHeight
+                        );
+
+                        vec3 hexColor = texture2D(tDiffuse, hexPixelCenter / uResolution).rgb;
+                        float hexLum = toGray(hexColor);
+
+                        // Create hexagonal dot based on luminance
+                        float hexRadius = hexSize * hexLum * 0.5;
+                        float dotPattern = 1.0 - smoothstep(0.0, hexRadius * dotIntensity, minDist);
+
+                        return dotPattern;
+                    }
+
+                    // ============================================================
+                    // PHASE 5: CREATIVE/ARTISTIC EFFECTS
+                    // ============================================================
+
+                    // Threshold Map Dithering - Custom artistic threshold patterns
+                    float thresholdMapDither(vec2 coord) {
+                        float patternType = floor(uParam1); // Pattern type (0-4)
+                        float scale = uParam2; // Pattern scale (1.0 - 10.0)
+
+                        vec2 p = coord / scale;
+                        float threshold = 0.5;
+
+                        if (patternType < 1.0) {
+                            // Concentric circles
+                            float dist = length(mod(p, 64.0) - 32.0);
+                            threshold = fract(dist * 0.1);
+                        } else if (patternType < 2.0) {
+                            // Diagonal lines
+                            threshold = fract((p.x + p.y) * 0.1);
+                        } else if (patternType < 3.0) {
+                            // Brick pattern
+                            vec2 brick = floor(p / 8.0);
+                            float rowOffset = mod(brick.y, 2.0) * 4.0;
+                            threshold = fract((brick.x + rowOffset) * 0.5);
+                        } else if (patternType < 4.0) {
+                            // Organic noise
+                            threshold = hash(floor(p));
+                        } else {
+                            // Radial burst from center
+                            vec2 center = uResolution * 0.5;
+                            vec2 delta = coord - center;
+                            float angle = atan(delta.y, delta.x);
+                            threshold = fract(angle * 8.0 / 6.28318);
+                        }
+
+                        return threshold;
+                    }
+
+                    // Kuwahara Filter + Dithering - Artistic painterly effect with dithering
+                    float kuwaharaDither(vec2 coord) {
+                        vec2 uv = coord / uResolution;
+                        int kernelSize = int(uParam1); // Filter kernel size (2-5)
+                        float ditherMix = uParam2; // Dither blend (0.0 - 1.0)
+
+                        // Kuwahara filter finds the most uniform quadrant around a pixel
+                        // This creates a painterly, posterized effect
+
+                        vec3 means[4];
+                        float variances[4];
+
+                        // Calculate mean and variance for 4 quadrants
+                        for (int q = 0; q < 4; q++) {
+                            vec3 sum = vec3(0.0);
+                            vec3 sumSq = vec3(0.0);
+                            float count = 0.0;
+
+                            int offsetX = (q % 2) * kernelSize - kernelSize;
+                            int offsetY = (q / 2) * kernelSize - kernelSize;
+
+                            for (int y = 0; y < kernelSize; y++) {
+                                for (int x = 0; x < kernelSize; x++) {
+                                    vec2 offset = vec2(float(x + offsetX), float(y + offsetY)) / uResolution;
+                                    vec3 texSample = texture2D(tDiffuse, uv + offset).rgb;
+                                    sum += texSample;
+                                    sumSq += texSample * texSample;
+                                    count += 1.0;
+                                }
+                            }
+
+                            means[q] = sum / count;
+                            vec3 variance = (sumSq / count) - (means[q] * means[q]);
+                            variances[q] = variance.r + variance.g + variance.b;
+                        }
+
+                        // Find quadrant with minimum variance (most uniform)
+                        int minQ = 0;
+                        float minVar = variances[0];
+                        for (int q = 1; q < 4; q++) {
+                            if (variances[q] < minVar) {
+                                minVar = variances[q];
+                                minQ = q;
+                            }
+                        }
+
+                        // Use the most uniform quadrant's mean
+                        float lum = toGray(means[minQ]);
+
+                        // Blend with dither pattern
+                        float dither = bayer8(coord);
+                        return mix(lum, dither, ditherMix);
+                    }
+
+                    // Dither Displacement Mapping - Dithering affects pixel positions
+                    float ditherDisplacement(vec2 coord) {
+                        float displacementStrength = uParam1; // How much to displace (0.0 - 10.0)
+                        float scale = uParam2; // Pattern scale
+
+                        // Generate displacement from dither pattern
+                        vec2 ditherOffset;
+                        ditherOffset.x = hash(coord * scale) * 2.0 - 1.0;
+                        ditherOffset.y = hash(coord * scale + vec2(1.3, 7.1)) * 2.0 - 1.0;
+
+                        // Sample image at displaced position
+                        vec2 displacedUV = (coord + ditherOffset * displacementStrength) / uResolution;
+                        displacedUV = clamp(displacedUV, 0.0, 1.0);
+
+                        vec3 displacedColor = texture2D(tDiffuse, displacedUV).rgb;
+                        float lum = toGray(displacedColor);
+
+                        // Apply dithering to displaced sample
+                        return bayer4(coord);
+                    }
+
+                    // Reaction-Diffusion Dithering - Organic pattern generation
+                    float reactionDiffusionDither(vec2 coord) {
+                        // Simplified reaction-diffusion approximation
+                        // True implementation would require iterative simulation
+                        float scale = uParam1; // Pattern scale (5.0 - 30.0)
+                        float complexity = uParam2; // Pattern complexity (1.0 - 5.0)
+
+                        vec2 p = coord / scale;
+
+                        // Multi-octave noise to simulate reaction-diffusion patterns
+                        float pattern = 0.0;
+                        float amplitude = 1.0;
+                        vec2 freq = p;
+
+                        for (int i = 0; i < 4; i++) {
+                            if (float(i) >= complexity) break;
+
+                            // Simulate chemical diffusion with nested noise
+                            float n1 = hash(floor(freq));
+                            float n2 = hash(floor(freq + vec2(0.5)));
+
+                            // Reaction term (activator-inhibitor)
+                            float activator = n1;
+                            float inhibitor = n2;
+                            float reaction = activator * activator - inhibitor;
+
+                            pattern += reaction * amplitude;
+
+                            amplitude *= 0.5;
+                            freq *= 2.3;
+                        }
+
+                        // Normalize and create organic threshold
+                        return fract(pattern * 0.5 + 0.5);
+                    }
+
+                    // Dither Morphology - Erosion/dilation effects
+                    float ditherMorphology(vec2 coord) {
+                        vec2 uv = coord / uResolution;
+                        float kernelSize = uParam1; // Morphology kernel size (1.0 - 5.0)
+                        float operation = uParam2; // 0 = erode, 1 = dilate, 0.5 = open/close
+
+                        // Generate base dither
+                        float baseDither = bayer8(coord);
+
+                        // Apply morphological operation
+                        float result = baseDither;
+
+                        if (operation < 0.33) {
+                            // Erosion - minimum filter
+                            result = 1.0;
+                            for (float y = -kernelSize; y <= kernelSize; y += 1.0) {
+                                for (float x = -kernelSize; x <= kernelSize; x += 1.0) {
+                                    vec2 offset = vec2(x, y);
+                                    float patternSample = bayer8(coord + offset);
+                                    result = min(result, patternSample);
+                                }
+                            }
+                        } else if (operation < 0.67) {
+                            // Dilation - maximum filter
+                            result = 0.0;
+                            for (float y = -kernelSize; y <= kernelSize; y += 1.0) {
+                                for (float x = -kernelSize; x <= kernelSize; x += 1.0) {
+                                    vec2 offset = vec2(x, y);
+                                    float patternSample = bayer8(coord + offset);
+                                    result = max(result, patternSample);
+                                }
+                            }
+                        } else {
+                            // Opening (erosion then dilation) or closing
+                            // Simplified as blend between eroded and dilated
+                            float eroded = 1.0;
+                            float dilated = 0.0;
+                            for (float y = -kernelSize; y <= kernelSize; y += 1.0) {
+                                for (float x = -kernelSize; x <= kernelSize; x += 1.0) {
+                                    vec2 offset = vec2(x, y);
+                                    float patternSample = bayer8(coord + offset);
+                                    eroded = min(eroded, patternSample);
+                                    dilated = max(dilated, patternSample);
+                                }
+                            }
+                            result = mix(eroded, dilated, 0.5);
+                        }
+
+                        return result;
+                    }
+
+                    // Multi-Scale Dithering - Combines multiple dither scales
+                    float multiScaleDither(vec2 coord) {
+                        float scales = uParam1; // Number of scales (2.0 - 5.0)
+                        float blendMode = uParam2; // 0 = add, 0.5 = multiply, 1 = max
+
+                        float result = 0.0;
+                        float weight = 1.0;
+                        float totalWeight = 0.0;
+
+                        for (int i = 0; i < 5; i++) {
+                            if (float(i) >= scales) break;
+
+                            float scale = pow(2.0, float(i));
+                            float pattern = bayer8(coord / scale);
+
+                            if (blendMode < 0.33) {
+                                // Additive
+                                result += pattern * weight;
+                                totalWeight += weight;
+                            } else if (blendMode < 0.67) {
+                                // Multiplicative
+                                if (i == 0) result = pattern;
+                                else result *= pattern;
+                            } else {
+                                // Maximum
+                                result = max(result, pattern * weight);
+                            }
+
+                            weight *= 0.5;
+                        }
+
+                        if (blendMode < 0.33) {
+                            result /= totalWeight;
+                        }
+
+                        return clamp(result, 0.0, 1.0);
                     }
 
                     float getThreshold(vec2 coord) {
                         if (uAlgorithm == 0) return 0.5; // none
                         if (uAlgorithm == 1) return bayer2(coord); // bayer-ordered
                         if (uAlgorithm == 2) return randomNoise(coord); // random-ordered
-                        if (uAlgorithm == 3) return errorDiffusion(coord, uParam1); // floyd-steinberg
-                        if (uAlgorithm == 4) return errorDiffusion(coord, uParam1) + uParam2; // atkinson
-                        if (uAlgorithm == 5) return errorDiffusion(coord, uParam1); // jarvis
-                        if (uAlgorithm == 6) return errorDiffusion(coord, uParam1); // stucki
-                        if (uAlgorithm == 7) return errorDiffusion(coord, uParam1); // burkes
-                        if (uAlgorithm == 8) return errorDiffusion(coord, uParam1); // sierra
-                        if (uAlgorithm == 9) return sierraLite(coord); // sierra-lite
-                        if (uAlgorithm == 10) return errorDiffusion(coord, uParam1); // two-row-sierra
+                        if (uAlgorithm == 3) return floydSteinberg(coord, uParam1); // floyd-steinberg
+                        if (uAlgorithm == 4) return atkinson(coord, uParam1); // atkinson
+                        if (uAlgorithm == 5) return jarvis(coord, uParam1); // jarvis-judice-ninke
+                        if (uAlgorithm == 6) return stucki(coord, uParam1); // stucki
+                        if (uAlgorithm == 7) return burkes(coord, uParam1); // burkes
+                        if (uAlgorithm == 8) return sierra(coord, uParam1); // sierra (full)
+                        if (uAlgorithm == 9) return sierraLiteDither(coord, uParam1); // sierra-lite
+                        if (uAlgorithm == 10) return sierra2Row(coord, uParam1); // two-row-sierra
                         if (uAlgorithm == 11) return bitTone(coord); // bit tone
                         if (uAlgorithm == 12) return checkers(coord, uParam1); // checkers-small
                         if (uAlgorithm == 13) return checkers(coord, uParam1); // checkers-medium
@@ -1107,6 +2044,12 @@ export const fragmentShader = `
                         if (uAlgorithm == 36) return voronoiPattern(coord); // voronoi
                         if (uAlgorithm == 37) return stipple(coord); // stippling
                         if (uAlgorithm == 38) return errorDiffusion(coord, uParam1); // fan
+
+                        // Error Diffusion Variants
+                        if (uAlgorithm == 40) return falseFloydSteinberg(coord, uParam1); // false floyd-steinberg
+                        if (uAlgorithm == 41) return horizontalStripe(coord, uParam1); // horizontal stripe
+                        if (uAlgorithm == 42) return verticalStripe(coord, uParam1); // vertical stripe
+
                         if (uAlgorithm == 50) return voidAndCluster(coord); // void-and-cluster
                         if (uAlgorithm == 51) return ostromoukhov(coord); // ostromoukhov variable
                         
@@ -1116,16 +2059,27 @@ export const fragmentShader = `
                         if (uAlgorithm == 53) return bayer4(coord); // chromatic aberration uses base dither
                         // Algorithm 54 (posterization) needs color info, handled differently
 
+                        // PHASE 2: Quality Enhancement Algorithms
+                        if (uAlgorithm == 55) return adaptiveThresholdDither(coord); // adaptive threshold
+                        if (uAlgorithm == 56) return anisotropicDither(coord); // anisotropic
+                        if (uAlgorithm == 57) return sobelEdgeWeightedDither(coord); // sobel edge-weighted
+
+                        // PHASE 3: Advanced Error Diffusion
+                        if (uAlgorithm == 58) return riemersmaDither(coord); // riemersma (hilbert curve)
+
+                        // PHASE 4: Print/Professional Effects
+                        if (uAlgorithm == 59) return halftoneCMYK(coord); // halftone CMYK
+                        if (uAlgorithm == 60) return hexagonalDither(coord); // hexagonal grid
+
+                        // PHASE 5: Creative/Artistic Effects
+                        if (uAlgorithm == 61) return thresholdMapDither(coord); // threshold map
+                        if (uAlgorithm == 62) return kuwaharaDither(coord); // kuwahara filter
+                        if (uAlgorithm == 63) return ditherDisplacement(coord); // displacement mapping
+                        if (uAlgorithm == 64) return reactionDiffusionDither(coord); // reaction-diffusion
+                        if (uAlgorithm == 65) return ditherMorphology(coord); // morphology (erode/dilate)
+                        if (uAlgorithm == 66) return multiScaleDither(coord); // multi-scale
+
                         return bayer4(coord);
-                    }
-
-                    vec3 quantize(vec3 color, int levels) {
-                        float step = 1.0 / float(levels - 1);
-                        return floor(color / step + 0.5) * step;
-                    }
-
-                    float toGray(vec3 color) {
-                        return dot(color, vec3(0.299, 0.587, 0.114));
                     }
 
                     void main() {
@@ -1187,6 +2141,12 @@ export const fragmentShader = `
 
                         // Get dither pattern value
                         vec2 coord = vUv * uResolution;
+
+                        // Apply pattern scale (advanced quality setting)
+                        if (uScale != 1.0) {
+                            coord = coord / uScale;
+                        }
+
                         float ditherPattern = getThreshold(coord);
 
                         // Multi-algorithm layering - blend second algorithm if enabled
@@ -1223,32 +2183,53 @@ export const fragmentShader = `
                         // Normalize pattern from 0-1 to -0.5 to 0.5
                         ditherPattern = (ditherPattern - 0.5) * 2.0 * adaptiveStrength;
 
+                        // Apply banding reduction - add extra noise to smooth gradients
+                        if (uBandingReduction > 0.0) {
+                            float bandingNoise = (hash(vUv * uResolution * 0.5) - 0.5) * 2.0;
+                            ditherPattern += bandingNoise * uBandingReduction * 0.3;
+                        }
+
                         // Apply dithering with perceptual color quantization
                         vec3 dithered;
-                        float stepSize = 1.0 / float(uColors - 1);
+                        float numLevels = float(uColors);
+                        float stepSize = 1.0 / (numLevels - 1.0);
 
                         if (uGrayscale) {
                             float gray = toGray(color);
                             // Add dither noise scaled to step size
-                            gray = gray + ditherPattern * stepSize * 0.5;
+                            float noisyGray = gray + ditherPattern * stepSize * uDitherStrength;
                             // Quantize to color levels
-                            gray = floor(gray / stepSize + 0.5) * stepSize;
-                            dithered = vec3(clamp(gray, 0.0, 1.0));
+                            float quantized = floor(noisyGray * (numLevels - 1.0) + 0.5) / (numLevels - 1.0);
+                            dithered = vec3(clamp(quantized, 0.0, 1.0));
                         } else {
-                            // Use LAB color space for perceptually accurate quantization
-                            vec3 labColor = rgb2lab(color);
+                            // Color space selection for better perceptual accuracy
+                            vec3 workingColor = color;
 
-                            // Add dither noise in LAB space (perceptually uniform)
-                            vec3 labNoisy = labColor + vec3(ditherPattern * stepSize * 0.5);
+                            // Convert to perceptual color space if selected
+                            if (uColorSpace == 1) {
+                                // LAB color space
+                                workingColor = rgb2lab(color);
+                            } else if (uColorSpace == 2) {
+                                // Oklab color space (modern perceptual)
+                                workingColor = rgb2oklab(color);
+                            }
 
-                            // Quantize in LAB space
-                            labNoisy.x = floor(labNoisy.x / stepSize + 0.5) * stepSize;
-                            labNoisy.y = floor(labNoisy.y / stepSize + 0.5) * stepSize;
-                            labNoisy.z = floor(labNoisy.z / stepSize + 0.5) * stepSize;
+                            // Add dither noise
+                            vec3 noisyColor = workingColor + vec3(ditherPattern * stepSize * uDitherStrength);
 
-                            // Convert back to RGB
-                            dithered = lab2rgb(labNoisy);
+                            // Quantize each channel
+                            dithered.r = floor(noisyColor.r * (numLevels - 1.0) + 0.5) / (numLevels - 1.0);
+                            dithered.g = floor(noisyColor.g * (numLevels - 1.0) + 0.5) / (numLevels - 1.0);
+                            dithered.b = floor(noisyColor.b * (numLevels - 1.0) + 0.5) / (numLevels - 1.0);
+
                             dithered = clamp(dithered, 0.0, 1.0);
+
+                            // Convert back to RGB if we were in a perceptual space
+                            if (uColorSpace == 1) {
+                                dithered = lab2rgb(dithered);
+                            } else if (uColorSpace == 2) {
+                                dithered = oklab2rgb(dithered);
+                            }
                         }
 
                         // Temporal coherence for video - blend with previous frame
@@ -1333,8 +2314,8 @@ export const fragmentShader = `
                             dithered = linearToSrgb(dithered);
                         }
 
-                        // Apply CRT effect if enabled
-                        if (uCRTEffect > 0.0) {
+                        // Apply CRT/Display effects if any are enabled
+                        if (uCRTEffect > 0.0 || uScanlines > 0.0 || uPhosphor || uCurvature > 0.0 || uVignette > 0.0 || uChromatic > 0.0 || uBloom > 0.0) {
                             dithered = applyCRTEffect(dithered, vUv, uCRTEffect);
                         }
 

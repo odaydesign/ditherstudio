@@ -129,6 +129,19 @@ export default function WebGLCanvas() {
         uBandingReduction: { value: state.bandingReduction },
         uPixelAspectRatio: { value: state.pixelAspectRatio },
         uCRTEffect: { value: state.crtEffect },
+        // CRT Display Effects
+        uScanlines: { value: state.scanlines },
+        uPhosphor: { value: state.phosphor },
+        uCurvature: { value: state.curvature },
+        uVignette: { value: state.vignette },
+        uChromatic: { value: state.chromatic },
+        uBloom: { value: state.bloom },
+        // Video/Animation
+        uFrameBlending: { value: state.frameBlending },
+        uFrameBlendStrength: { value: state.frameBlendStrength },
+        uMotionAdaptive: { value: state.motionAdaptive },
+        uMotionSensitivity: { value: state.motionSensitivity },
+        uTemporalStability: { value: state.temporalStability },
       },
     });
 
@@ -214,17 +227,31 @@ export default function WebGLCanvas() {
   // Load video file
   const loadVideo = useCallback((file: File) => {
     const video = document.createElement('video');
-    video.src = URL.createObjectURL(file);
-    video.load();
     video.loop = true;
     video.muted = true;
+    video.playsInline = true;
+    video.autoplay = false;
+    video.preload = 'metadata';
+
+    // Add error handling
+    video.onerror = (e) => {
+      console.error('Video loading error:', e);
+      console.error('Video error code:', video.error?.code, video.error?.message);
+    };
 
     video.onloadedmetadata = () => {
+      console.log('Video metadata loaded:', {
+        width: video.videoWidth,
+        height: video.videoHeight,
+        duration: video.duration
+      });
+
       if (!sceneRef.current || !cameraRef.current || !rendererRef.current) return;
 
       const videoTexture = new THREE.VideoTexture(video);
       videoTexture.minFilter = THREE.LinearFilter;
       videoTexture.magFilter = THREE.LinearFilter;
+      videoTexture.format = THREE.RGBAFormat;
       videoTextureRef.current = videoTexture;
       videoElementRef.current = video;
 
@@ -247,14 +274,46 @@ export default function WebGLCanvas() {
       sceneRef.current.add(mesh);
 
       setHasImage(true);
-      video.play();
-      startAnimation();
+
+      // Play video with proper promise handling
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('Video playback started');
+            startAnimation();
+          })
+          .catch((error) => {
+            console.error('Video play failed:', error);
+            // Try to play again after user interaction
+            startAnimation();
+          });
+      } else {
+        startAnimation();
+      }
     };
+
+    // Set video source after event handlers are attached
+    video.src = URL.createObjectURL(file);
+    video.load();
   }, [createMaterial, startAnimation]);
 
   // Handle file upload
   useEffect(() => {
+    // Cleanup previous video if exists
+    if (videoElementRef.current) {
+      videoElementRef.current.pause();
+      videoElementRef.current.src = '';
+      videoElementRef.current.load();
+      if (videoTextureRef.current) {
+        videoTextureRef.current.dispose();
+        videoTextureRef.current = null;
+      }
+      videoElementRef.current = null;
+    }
+
     if (currentFile) {
+      console.log('Loading file:', currentFile.name, 'isVideo:', isVideo, 'type:', currentFile.type);
       if (isVideo) {
         loadVideo(currentFile);
       } else {
@@ -309,6 +368,19 @@ export default function WebGLCanvas() {
     material.uniforms.uBandingReduction.value = ditherState.bandingReduction;
     material.uniforms.uPixelAspectRatio.value = ditherState.pixelAspectRatio;
     material.uniforms.uCRTEffect.value = ditherState.crtEffect;
+    // CRT Display Effects
+    material.uniforms.uScanlines.value = ditherState.scanlines;
+    material.uniforms.uPhosphor.value = ditherState.phosphor;
+    material.uniforms.uCurvature.value = ditherState.curvature;
+    material.uniforms.uVignette.value = ditherState.vignette;
+    material.uniforms.uChromatic.value = ditherState.chromatic;
+    material.uniforms.uBloom.value = ditherState.bloom;
+    // Video/Animation
+    material.uniforms.uFrameBlending.value = ditherState.frameBlending;
+    material.uniforms.uFrameBlendStrength.value = ditherState.frameBlendStrength;
+    material.uniforms.uMotionAdaptive.value = ditherState.motionAdaptive;
+    material.uniforms.uMotionSensitivity.value = ditherState.motionSensitivity;
+    material.uniforms.uTemporalStability.value = ditherState.temporalStability;
   }, [ditherState]);
 
   // Handle mouse wheel for zooming
