@@ -17,6 +17,7 @@ export default function WebGLCanvas() {
   const videoTextureRef = useRef<THREE.VideoTexture | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const renderTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
+  const customShapeTexRef = useRef<THREE.Texture | null>(null);
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
   const animationFrameRef = useRef<number | null>(null);
@@ -55,7 +56,6 @@ export default function WebGLCanvas() {
     renderer.setSize(800, 600);
     rendererRef.current = renderer;
 
-    // Create render target for temporal coherence
     const renderTarget = new THREE.WebGLRenderTarget(800, 600);
     renderTargetRef.current = renderTarget;
 
@@ -69,6 +69,38 @@ export default function WebGLCanvas() {
       renderTarget.dispose();
     };
   }, []);
+
+  // Load custom shape texture
+  useEffect(() => {
+    const textureUrl = useDitherStore.getState().customShapeTexture;
+    if (textureUrl) {
+      new THREE.TextureLoader().load(
+        textureUrl,
+        (tex) => {
+          tex.minFilter = THREE.LinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          tex.wrapS = THREE.ClampToEdgeWrapping;
+          tex.wrapT = THREE.ClampToEdgeWrapping;
+
+          customShapeTexRef.current = tex;
+
+          if (materialRef.current) {
+            materialRef.current.uniforms.tAsciiCustomShape.value = tex;
+            materialRef.current.needsUpdate = true;
+          }
+        },
+        undefined,
+        (err) => {
+          console.error("Error loading custom shape texture", err);
+        }
+      );
+    } else {
+      customShapeTexRef.current = null;
+      if (materialRef.current) {
+        materialRef.current.uniforms.tAsciiCustomShape.value = null;
+      }
+    }
+  }, [ditherState.customShapeTexture]);
 
   // Create shader material
   const createMaterial = useCallback((texture: THREE.Texture, width: number, height: number) => {
@@ -107,6 +139,7 @@ export default function WebGLCanvas() {
         uHighlights: { value: state.highlights },
         uLumThreshold: { value: state.lumThreshold },
         uBlur: { value: state.blur },
+        uPointSize: { value: state.pointSize },
         uPixelation: { value: state.pixelation },
         uColorMode: { value: state.colorMode },
         uDuotoneDark: { value: new THREE.Color(state.duotoneDark) },
@@ -142,6 +175,32 @@ export default function WebGLCanvas() {
         uMotionAdaptive: { value: state.motionAdaptive },
         uMotionSensitivity: { value: state.motionSensitivity },
         uTemporalStability: { value: state.temporalStability },
+        // ASCII / Shape Effects
+        uAsciiCellSizeNew: { value: state.asciiCellSize },
+        uAsciiGap: { value: state.asciiGap },
+        uAsciiBaseScale: { value: state.asciiBaseScale },
+        uAsciiIntensityNew: { value: state.asciiIntensity },
+        uAsciiModeNew: { value: state.asciiMode },
+        uAsciiShape: { value: state.asciiShape },
+        uAsciiBgColor: { value: new THREE.Color(state.asciiBgColor) },
+        uAsciiFgColor: { value: new THREE.Color(state.asciiFgColor) },
+        uAsciiUseColor: { value: state.asciiUseColor },
+        uAsciiInvertNew: { value: state.asciiInvert },
+        tAsciiCustomShape: { value: customShapeTexRef.current },
+
+        // Geometric Halftones
+        uHalftoneShape: { value: state.halftoneShape },
+        uHalftoneRotation: { value: state.halftoneRotation },
+        uHalftoneSpread: { value: state.halftoneSpread },
+
+        // Post-Processing
+        uVhsEffect: { value: state.vhsEffect },
+        uEdgeGlow: { value: state.edgeGlow },
+        uEmboss: { value: state.emboss },
+
+        // Comparison
+        uComparison: { value: state.comparisonMode },
+        uComparisonPos: { value: state.comparisonPosition },
       },
     });
 
@@ -224,30 +283,139 @@ export default function WebGLCanvas() {
     reader.readAsDataURL(file);
   }, [createMaterial, startAnimation]);
 
+  // Handle Webcam
+  const startWebcam = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.play();
+
+      video.onloadedmetadata = () => {
+        if (!sceneRef.current || !cameraRef.current || !rendererRef.current) return;
+
+        const width = video.videoWidth;
+        const height = video.videoHeight;
+
+        const texture = new THREE.VideoTexture(video);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        videoTextureRef.current = texture;
+        videoElementRef.current = video;
+
+        setResolution({ width, height });
+        rendererRef.current.setSize(width, height);
+
+        const material = createMaterial(texture, width, height);
+        const geometry = new THREE.PlaneGeometry(2, 2);
+
+        if (meshRef.current) {
+          sceneRef.current.remove(meshRef.current);
+          meshRef.current.geometry.dispose();
+        }
+
+        const mesh = new THREE.Mesh(geometry, material);
+        meshRef.current = mesh;
+        sceneRef.current.add(mesh);
+
+        setHasImage(true);
+        startAnimation();
+      }
+      return { stream, video };
+    } catch (err) {
+      console.error("Error accessing webcam:", err);
+      alert("Could not access webcam. Please check permissions.");
+      return null;
+    }
+  }, [createMaterial, startAnimation]);
+
+  // Effect to trigger webcam
+  useEffect(() => {
+    let currentStream: MediaStream | null = null;
+    let video: HTMLVideoElement | null = null;
+
+    if (ditherState.isWebcam) {
+      startWebcam().then((res) => {
+        if (res) {
+          currentStream = res.stream;
+          video = res.video;
+        }
+      });
+    }
+
+    return () => {
+      // Cleanup when component unmounts or isWebcam becomes false
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+      if (video) {
+        video.pause();
+        video.srcObject = null;
+      }
+    };
+  }, [ditherState.isWebcam, startWebcam]);
+
   // Load video file
   const loadVideo = useCallback((file: File) => {
+    // Create video element
     const video = document.createElement('video');
     video.loop = true;
     video.muted = true;
     video.playsInline = true;
     video.autoplay = false;
-    video.preload = 'metadata';
+    video.preload = 'auto';
 
-    // Add error handling
-    video.onerror = (e) => {
-      console.error('Video loading error:', e);
-      console.error('Video error code:', video.error?.code, video.error?.message);
+    // These attributes help with mobile compatibility
+    video.setAttribute('muted', '');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+
+    // Create blob URL
+    const videoUrl = URL.createObjectURL(file);
+    let isLoaded = false;
+
+    // Error handler
+    video.onerror = () => {
+      // Only log error if we haven't successfully loaded
+      if (!isLoaded) {
+        const error = video.error;
+        console.warn('Video loading issue:', {
+          file: file.name,
+          type: file.type,
+          size: file.size,
+          errorCode: error?.code,
+          errorMessage: error?.message
+        });
+      }
     };
 
+    // Metadata loaded handler
     video.onloadedmetadata = () => {
-      console.log('Video metadata loaded:', {
-        width: video.videoWidth,
-        height: video.videoHeight,
-        duration: video.duration
-      });
+      if (!sceneRef.current || !cameraRef.current || !rendererRef.current) {
+        console.warn('Scene not ready for video');
+        return;
+      }
 
-      if (!sceneRef.current || !cameraRef.current || !rendererRef.current) return;
+      // Validate video dimensions
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.warn('Invalid video dimensions');
+        return;
+      }
 
+      isLoaded = true;
+      console.log('Video loaded:', video.videoWidth, 'x', video.videoHeight);
+
+      // Clean up previous video texture
+      if (videoTextureRef.current) {
+        videoTextureRef.current.dispose();
+      }
+      if (videoElementRef.current) {
+        videoElementRef.current.pause();
+        if (videoElementRef.current.src.startsWith('blob:')) {
+          URL.revokeObjectURL(videoElementRef.current.src);
+        }
+      }
+
+      // Create new video texture
       const videoTexture = new THREE.VideoTexture(video);
       videoTexture.minFilter = THREE.LinearFilter;
       videoTexture.magFilter = THREE.LinearFilter;
@@ -256,6 +424,9 @@ export default function WebGLCanvas() {
       videoElementRef.current = video;
 
       setResolution({ width: video.videoWidth, height: video.videoHeight });
+
+      // Set video duration in store for export
+      useDitherStore.getState().setVideoDuration(video.duration);
 
       // Update renderer size
       rendererRef.current.setSize(video.videoWidth, video.videoHeight);
@@ -275,50 +446,31 @@ export default function WebGLCanvas() {
 
       setHasImage(true);
 
-      // Play video with proper promise handling
-      const playPromise = video.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            console.log('Video playback started');
-            startAnimation();
-          })
-          .catch((error) => {
-            console.error('Video play failed:', error);
-            // Try to play again after user interaction
-            startAnimation();
-          });
-      } else {
-        startAnimation();
-      }
+      // Start video playback
+      video.play()
+        .then(() => {
+          startAnimation();
+        })
+        .catch((err) => {
+          console.warn('Autoplay blocked, starting animation anyway:', err.message);
+          startAnimation();
+        });
     };
 
-    // Set video source after event handlers are attached
-    video.src = URL.createObjectURL(file);
+    // Set source and start loading
+    video.src = videoUrl;
     video.load();
   }, [createMaterial, startAnimation]);
 
   // Handle file upload
   useEffect(() => {
-    // Cleanup previous video if exists
-    if (videoElementRef.current) {
-      videoElementRef.current.pause();
-      videoElementRef.current.src = '';
-      videoElementRef.current.load();
-      if (videoTextureRef.current) {
-        videoTextureRef.current.dispose();
-        videoTextureRef.current = null;
-      }
-      videoElementRef.current = null;
-    }
+    if (!currentFile) return;
 
-    if (currentFile) {
-      console.log('Loading file:', currentFile.name, 'isVideo:', isVideo, 'type:', currentFile.type);
-      if (isVideo) {
-        loadVideo(currentFile);
-      } else {
-        loadImage(currentFile);
-      }
+    // Load the file
+    if (isVideo) {
+      loadVideo(currentFile);
+    } else {
+      loadImage(currentFile);
     }
   }, [currentFile, isVideo, loadImage, loadVideo]);
 
@@ -347,6 +499,7 @@ export default function WebGLCanvas() {
     material.uniforms.uHighlights.value = ditherState.highlights;
     material.uniforms.uLumThreshold.value = ditherState.lumThreshold;
     material.uniforms.uBlur.value = ditherState.blur;
+    material.uniforms.uPointSize.value = ditherState.pointSize;
     material.uniforms.uPixelation.value = ditherState.pixelation;
     material.uniforms.uColorMode.value = ditherState.colorMode;
     material.uniforms.uDuotoneDark.value = new THREE.Color(ditherState.duotoneDark);
@@ -375,12 +528,35 @@ export default function WebGLCanvas() {
     material.uniforms.uVignette.value = ditherState.vignette;
     material.uniforms.uChromatic.value = ditherState.chromatic;
     material.uniforms.uBloom.value = ditherState.bloom;
+
+    // Post-Processing
+    if (material.uniforms.uVhsEffect) material.uniforms.uVhsEffect.value = ditherState.vhsEffect;
+    if (material.uniforms.uEdgeGlow) material.uniforms.uEdgeGlow.value = ditherState.edgeGlow;
+    if (material.uniforms.uEmboss) material.uniforms.uEmboss.value = ditherState.emboss;
+
     // Video/Animation
     material.uniforms.uFrameBlending.value = ditherState.frameBlending;
     material.uniforms.uFrameBlendStrength.value = ditherState.frameBlendStrength;
     material.uniforms.uMotionAdaptive.value = ditherState.motionAdaptive;
     material.uniforms.uMotionSensitivity.value = ditherState.motionSensitivity;
     material.uniforms.uTemporalStability.value = ditherState.temporalStability;
+
+    // ASCII / Shape Effects
+    if (material.uniforms.uAsciiCellSizeNew) material.uniforms.uAsciiCellSizeNew.value = ditherState.asciiCellSize;
+    if (material.uniforms.uAsciiGap) material.uniforms.uAsciiGap.value = ditherState.asciiGap;
+    if (material.uniforms.uAsciiBaseScale) material.uniforms.uAsciiBaseScale.value = ditherState.asciiBaseScale;
+    if (material.uniforms.uAsciiIntensityNew) material.uniforms.uAsciiIntensityNew.value = ditherState.asciiIntensity;
+    if (material.uniforms.uAsciiModeNew) material.uniforms.uAsciiModeNew.value = ditherState.asciiMode;
+    if (material.uniforms.uAsciiShape) material.uniforms.uAsciiShape.value = ditherState.asciiShape;
+    if (material.uniforms.uAsciiBgColor) material.uniforms.uAsciiBgColor.value = new THREE.Color(ditherState.asciiBgColor);
+    if (material.uniforms.uAsciiFgColor) material.uniforms.uAsciiFgColor.value = new THREE.Color(ditherState.asciiFgColor);
+    if (material.uniforms.uAsciiUseColor) material.uniforms.uAsciiUseColor.value = ditherState.asciiUseColor;
+    if (material.uniforms.uAsciiInvertNew) material.uniforms.uAsciiInvertNew.value = ditherState.asciiInvert;
+
+    // Comparison
+    if (material.uniforms.uComparison) material.uniforms.uComparison.value = ditherState.comparisonMode;
+    if (material.uniforms.uComparisonPos) material.uniforms.uComparisonPos.value = ditherState.comparisonPosition;
+
   }, [ditherState]);
 
   // Handle mouse wheel for zooming
@@ -413,8 +589,30 @@ export default function WebGLCanvas() {
     setIsDragging(false);
   }, []);
 
+  // Handle Drops
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      const isVideoFile = file.type.startsWith('video/');
+      useDitherStore.getState().setFile(file, isVideoFile);
+    }
+  }, []);
+
   return (
-    <div className="relative flex items-center justify-center w-full h-full bg-[#e8e5dd] overflow-hidden">
+    <div
+      className="relative flex items-center justify-center w-full h-full bg-[#e8e5dd] overflow-hidden"
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       {!hasImage && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
           <div className="text-center text-[#999] text-sm">
@@ -447,13 +645,59 @@ export default function WebGLCanvas() {
       </div>
 
       {hasImage && (
-        <div className="absolute top-10 right-10 bg-[rgba(232,229,221,0.9)] border border-[#d0cdc4] px-4 py-3 text-xs text-[#666] pointer-events-none z-20">
-          <div className="text-[#2a2a2a] font-medium mb-1">
-            <span className="fps">{ditherState.fps} FPS</span>
+        <>
+          {/* Stats Overlay */}
+          <div className="absolute top-10 right-10 bg-[rgba(232,229,221,0.9)] border border-[#d0cdc4] px-4 py-3 text-xs text-[#666] pointer-events-none z-20">
+            <div className="text-[#2a2a2a] font-medium mb-1">
+              <span className="fps">{ditherState.fps} FPS</span>
+            </div>
+            <div>{resolution.width} × {resolution.height}</div>
+            <div className="mt-1">Zoom: {Math.round(zoom * 100)}%</div>
           </div>
-          <div>{resolution.width} × {resolution.height}</div>
-          <div className="mt-1">Zoom: {Math.round(zoom * 100)}%</div>
-        </div>
+
+          {/* Canvas Controls */}
+          <div className="absolute bottom-10 right-10 flex gap-2 z-30">
+            <button
+              onClick={() => setZoom(z => Math.max(0.1, z - 0.1))}
+              className="w-8 h-8 flex items-center justify-center bg-white border border-[#d0cdc4] text-[#2a2a2a] hover:bg-[#f5f3ee]"
+              title="Zoom Out"
+            >-</button>
+            <button
+              onClick={() => setZoom(1)}
+              className="px-3 h-8 flex items-center justify-center bg-white border border-[#d0cdc4] text-[#2a2a2a] hover:bg-[#f5f3ee] text-xs font-medium"
+              title="Reset Zoom to 100%"
+            >100%</button>
+            <button
+              onClick={() => setZoom(z => Math.min(10, z + 0.1))}
+              className="w-8 h-8 flex items-center justify-center bg-white border border-[#d0cdc4] text-[#2a2a2a] hover:bg-[#f5f3ee]"
+              title="Zoom In"
+            >+</button>
+            <button
+              onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+              className="px-3 h-8 flex items-center justify-center bg-[#2a2a2a] text-white border border-[#2a2a2a] hover:opacity-90 text-xs"
+              title="Reset View"
+            >FIT</button>
+          </div>
+
+          {/* Comparison Slider */}
+          {ditherState.comparisonMode && (
+            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-64 bg-white/90 p-3 border border-[#d0cdc4] z-30 flex flex-col items-center gap-2">
+              <div className="text-[10px] font-medium text-[#666] w-full flex justify-between">
+                <span>ORIGINAL</span>
+                <span>DITHERED</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={ditherState.comparisonPosition}
+                onChange={(e) => useDitherStore.getState().setComparisonPosition(parseFloat(e.target.value))}
+                className="w-full h-1 bg-[#d0cdc4] rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

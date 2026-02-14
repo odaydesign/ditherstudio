@@ -15,15 +15,86 @@ const PRESET_PALETTES = [
 ];
 
 // Group algorithms by category for dropdown
-const algorithmCategories = {
-  'Popular': ['floyd', 'bayer4', 'halftone45', 'atkinson', 'blue', 'stipple'],
-  'Error Diffusion': ['floyd', 'ostromoukhov', 'atkinson', 'jarvis', 'stucki', 'burkes', 'sierra', 'sierra2', 'sierralite'],
-  'Ordered/Bayer': ['bayer2', 'bayer3', 'bayer4', 'bayer8', 'bayer16'],
-  'Halftone/Print': ['halftone', 'halftone45', 'ellipse', 'diamond', 'dispersed', 'cluster'],
-  'Artistic': ['dots', 'lines', 'crosshatch', 'stipple', 'spiral', 'voronoi'],
-  'Noise': ['random', 'blue', 'perlin', 'voidcluster'],
-  'Geometric': ['checkerssmall', 'checkersmedium', 'checkerslarge', 'wave', 'radialburst', 'vortex', 'mosaic'],
-};
+// Define explicit order for categories
+const CATEGORY_ORDER = ['Basic', 'Error Diffusion', 'Advanced Error Diffusion', 'Ordered', 'Artistic'];
+
+// Group algorithms by category dynamically
+const algorithmCategories = algorithms.reduce((acc, algo) => {
+  if (!acc[algo.category]) {
+    acc[algo.category] = [];
+  }
+  acc[algo.category].push(algo.id);
+  return acc;
+}, {} as Record<string, string[]>);
+
+const sortedCategories = Object.entries(algorithmCategories).sort((a, b) => {
+  const indexA = CATEGORY_ORDER.indexOf(a[0]);
+  const indexB = CATEGORY_ORDER.indexOf(b[0]);
+  if (indexA === -1) return 1;
+  if (indexB === -1) return -1;
+  return indexA - indexB;
+});
+
+const ASCII_MODES = [
+  { value: 0, label: 'Static (Flat)' },
+  { value: 1, label: 'Halftone' },
+  { value: 2, label: 'Inv Halftone' },
+  { value: 3, label: 'Rotation' },
+  { value: 4, label: 'Stretch V' },
+  { value: 5, label: 'Stretch H' },
+  { value: 6, label: 'Checkerboard' },
+  { value: 7, label: 'Wobble' },
+  { value: 8, label: 'Glitch (Offset)' },
+  { value: 9, label: 'Melt (Drip)' },
+  { value: 10, label: 'Midtone Scale' },
+  { value: 11, label: 'Ripple' },
+  { value: 12, label: 'Quantize' },
+  { value: 13, label: 'Noise' },
+  { value: 14, label: 'Flow Field (Rot)' },
+  { value: 15, label: 'Threshold' },
+  { value: 16, label: 'Flow Field (Dir)' },
+  { value: 17, label: 'Edge Detect' },
+  { value: 18, label: 'Mosaic Jitter' },
+  { value: 19, label: 'Posterize' },
+  { value: 20, label: 'Interference' },
+  { value: 21, label: 'CRT Scanline' },
+  { value: 22, label: 'Bio / Cellular' },
+  { value: 23, label: 'Eraser / Noise' },
+];
+
+const ASCII_SHAPES = [
+  { value: 0, label: 'Circle' },
+  { value: 1, label: 'Square' },
+  { value: 2, label: 'Triangle' },
+  { value: 3, label: 'Diamond' },
+  { value: 4, label: 'Hexagon' },
+  { value: 5, label: 'Rect Vertical' },
+  { value: 6, label: 'Rect Horizontal' },
+  { value: 7, label: 'Diagonal R' },
+  { value: 8, label: 'Diagonal L' },
+  { value: 9, label: 'Octagon' },
+  { value: 10, label: 'Star' },
+  { value: 11, label: 'Heart' },
+  { value: 12, label: 'Flower' },
+  { value: 13, label: 'Gear' },
+  { value: 14, label: 'Ring' },
+  { value: 15, label: 'Hollow Rect' },
+  { value: 16, label: 'Trapezoid' },
+  { value: 17, label: 'Romb' },
+  { value: 18, label: 'Plus' },
+  { value: 19, label: 'Chevron' },
+  { value: 20, label: 'Pacman' },
+  { value: 21, label: 'Cross' },
+  { value: 22, label: 'Semi-Circle Top' },
+  { value: 23, label: 'Semi-Circle Bottom' },
+  { value: 24, label: 'Shuriken' },
+  { value: 25, label: 'Lightning' },
+  { value: 26, label: 'Ghost' },
+  { value: 27, label: 'Leaf' },
+  { value: 28, label: 'Cloud' },
+  { value: 29, label: 'Concentric' },
+  { value: 30, label: 'Custom SVG / Image' },
+];
 
 export default function SimplifiedSettings() {
   const {
@@ -57,6 +128,8 @@ export default function SimplifiedSettings() {
     bloom,
     // Video/Animation
     isVideo,
+    isWebcam,
+    setWebcam,
     temporalDither,
     temporalSpeed,
     temporalWeight,
@@ -64,7 +137,32 @@ export default function SimplifiedSettings() {
     frameBlendStrength,
     motionAdaptive,
     motionSensitivity,
-    temporalStability
+    temporalStability,
+    pointSize,
+    // Effects
+    vhsEffect,
+    edgeGlow,
+    emboss,
+    // ASCII Params
+    asciiCellSize,
+    asciiGap,
+    asciiBaseScale,
+    asciiIntensity,
+    asciiMode,
+    asciiShape,
+    asciiBgColor,
+    asciiFgColor,
+    asciiUseColor,
+    asciiInvert,
+    setAsciiSetting,
+    comparisonMode,
+    setCustomShape,
+    customShapeTexture,
+    // Geometric Halftone
+    halftoneShape,
+    halftoneRotation,
+    halftoneSpread,
+    setHalftoneSetting
   } = useDitherStore();
 
   const [selectedRetroPreset, setSelectedRetroPreset] = useState<string | null>(null);
@@ -109,7 +207,7 @@ export default function SimplifiedSettings() {
   const currentAlgorithm = algorithms.find(a => a.shaderValue === algorithm);
 
   useEffect(() => {
-    setAlgorithm(3);
+    setAlgorithm(1); // Default to Floyd-Steinberg
     setColorMode(2);
   }, [setAlgorithm, setColorMode]);
 
@@ -119,12 +217,72 @@ export default function SimplifiedSettings() {
 
   return (
     <div className="space-y-1">
-
       {/* ============================================ */}
-      {/* SECTION 1: ALGORITHM & DITHER SETTINGS */}
+      {/* SECTION 1: SOURCE IMAGE */}
       {/* ============================================ */}
       <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">ALGORITHM</h2>
+        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">SOURCE IMAGE</h2>
+
+        <div className="space-y-4">
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Brightness</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{brightness.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="-1"
+              max="1"
+              step="0.01"
+              value={brightness}
+              onChange={(e) => setGlobalSetting('brightness', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Contrast</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{contrast.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="2"
+              step="0.01"
+              value={contrast}
+              onChange={(e) => setGlobalSetting('contrast', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[#666]">Gamma Correction</span>
+            <input
+              type="checkbox"
+              checked={gammaCorrect}
+              onChange={(e) => setGlobalSetting('gammaCorrect', e.target.checked)}
+              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+            />
+          </div>
+
+          <div className="flex items-center justify-between border-t border-[#d0cdc4] pt-2 mt-2">
+            <span className="text-xs text-[#666] font-medium">Split-View Comparison</span>
+            <input
+              type="checkbox"
+              checked={comparisonMode}
+              onChange={(e) => setGlobalSetting('comparisonMode', e.target.checked)}
+              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ============================================ */}
+      {/* SECTION 2: ALGORITHM & DITHERING */}
+      {/* ============================================ */}
+      <div className={sectionClass}>
+        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">ALGORITHM & DITHERING</h2>
 
         {/* Algorithm Dropdown */}
         <select
@@ -132,7 +290,7 @@ export default function SimplifiedSettings() {
           onChange={(e) => handleAlgorithmChange(Number(e.target.value))}
           className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer hover:border-[#2a2a2a] mb-2"
         >
-          {Object.entries(algorithmCategories).map(([category, algoIds]) => (
+          {sortedCategories.map(([category, algoIds]) => (
             <optgroup key={category} label={category}>
               {algoIds.map(id => {
                 const algo = algorithms.find(a => a.id === id);
@@ -188,67 +346,308 @@ export default function SimplifiedSettings() {
           </div>
         )}
 
-        {/* Dither Quality Settings - Related to Algorithm */}
-        <div className="space-y-3 pt-3 border-t border-[#e0ddd5]">
-          <div className="flex justify-between mb-2">
-            <label className="text-xs text-[#666]">Threshold</label>
-            <span className="text-xs text-[#2a2a2a] font-mono">{threshold.toFixed(2)}</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={threshold}
-            onChange={(e) => setGlobalSetting('threshold', Number(e.target.value))}
-            className={sliderClass}
-          />
+        {/* ASCII / SHAPE SPECIFIC CONTROLS */}
+        {algorithm === 2 && (
+          <div className="space-y-4 mb-4 border-t border-[#d0cdc4] pt-4">
 
-          <div className="flex justify-between mb-2 mt-3">
-            <label className="text-xs text-[#666]">Pattern Scale</label>
-            <span className="text-xs text-[#2a2a2a] font-mono">{scale.toFixed(2)}</span>
-          </div>
-          <input
-            type="range"
-            min="0.5"
-            max="4"
-            step="0.1"
-            value={scale}
-            onChange={(e) => setGlobalSetting('scale', Number(e.target.value))}
-            className={sliderClass}
-          />
+            {/* Mode Selection */}
+            <div>
+              <label className="block text-xs text-[#666] mb-2">Effect Mode</label>
+              <select
+                value={asciiMode}
+                onChange={(e) => setAsciiSetting('asciiMode', Number(e.target.value))}
+                className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer"
+              >
+                {ASCII_MODES.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
 
-          <div className="flex justify-between mb-2 mt-3">
-            <label className="text-xs text-[#666]">Randomization</label>
-            <span className="text-xs text-[#2a2a2a] font-mono">{patternRandomization.toFixed(2)}</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={patternRandomization}
-            onChange={(e) => setGlobalSetting('patternRandomization', Number(e.target.value))}
-            className={sliderClass}
-          />
+            {/* Shape Selection */}
+            <div>
+              <label className="block text-xs text-[#666] mb-2">Shape</label>
+              <select
+                value={asciiShape}
+                onChange={(e) => setAsciiSetting('asciiShape', Number(e.target.value))}
+                className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer"
+              >
+                {ASCII_SHAPES.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
 
-          <div className="flex items-center justify-between mt-3">
-            <span className="text-xs text-[#666]">Serpentine Scan</span>
+              {asciiShape === 30 && (
+                <div className="mt-2">
+                  <label className="block text-xs text-[#666] mb-1">Upload Shape (SVG/PNG)</label>
+                  <input
+                    type="file"
+                    accept="image/*,.svg"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          if (event.target?.result) {
+                            setCustomShape(event.target.result as string);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="w-full text-[10px] text-[#666] file:mr-2 file:py-1 file:px-2 file:border-0 file:text-xs file:bg-[#2a2a2a] file:text-white hover:file:bg-[#444] cursor-pointer"
+                  />
+                  {customShapeTexture && (
+                    <div className="mt-1 text-[9px] text-green-600 flex items-center">
+                      <span className="w-2 h-2 rounded-full bg-green-500 mr-1"></span>
+                      Custom shape loaded
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Cell Size */}
+            <div>
+              <div className="flex justify-between mb-2">
+                <label className="text-xs text-[#666]">Cell Size</label>
+                <span className="text-xs text-[#2a2a2a] font-mono">{asciiCellSize}px</span>
+              </div>
+              <input
+                type="range"
+                min="4"
+                max="60"
+                step="1"
+                value={asciiCellSize}
+                onChange={(e) => setAsciiSetting('asciiCellSize', Number(e.target.value))}
+                className={sliderClass}
+              />
+            </div>
+
+            {/* Base Scale */}
+            <div>
+              <div className="flex justify-between mb-2">
+                <label className="text-xs text-[#666]">Shape Scale</label>
+                <span className="text-xs text-[#2a2a2a] font-mono">{asciiBaseScale.toFixed(2)}</span>
+              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="3.0"
+                step="0.1"
+                value={asciiBaseScale}
+                onChange={(e) => setAsciiSetting('asciiBaseScale', Number(e.target.value))}
+                className={sliderClass}
+              />
+            </div>
+
+            {/* Gap */}
+            <div>
+              <div className="flex justify-between mb-2">
+                <label className="text-xs text-[#666]">Gap</label>
+                <span className="text-xs text-[#2a2a2a] font-mono">{asciiGap.toFixed(2)}</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="10.0"
+                step="0.25"
+                value={asciiGap}
+                onChange={(e) => setAsciiSetting('asciiGap', Number(e.target.value))}
+                className={sliderClass}
+              />
+            </div>
+
+            {/* Intensity */}
+            <div>
+              <div className="flex justify-between mb-2">
+                <label className="text-xs text-[#666]">Intensity</label>
+                <span className="text-xs text-[#2a2a2a] font-mono">{asciiIntensity.toFixed(1)}</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="5.0"
+                step="0.1"
+                value={asciiIntensity}
+                onChange={(e) => setAsciiSetting('asciiIntensity', Number(e.target.value))}
+                className={sliderClass}
+              />
+            </div>
+
+            {/* Colors */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-[#666] mb-2">Shape Color</label>
+                <div className="relative">
+                  <input
+                    type="color"
+                    value={asciiFgColor}
+                    onChange={(e) => setAsciiSetting('asciiFgColor', e.target.value)}
+                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                  />
+                  <div className="w-full h-8 border border-[#d0cdc4]" style={{ backgroundColor: asciiFgColor }} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-[#666] mb-2">Background</label>
+                <div className="relative">
+                  <input
+                    type="color"
+                    value={asciiBgColor}
+                    onChange={(e) => setAsciiSetting('asciiBgColor', e.target.value)}
+                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                  />
+                  <div className="w-full h-8 border border-[#d0cdc4]" style={{ backgroundColor: asciiBgColor }} />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-[#666]">Use Image Colors</label>
+              <input
+                type="checkbox"
+                checked={asciiUseColor}
+                onChange={(e) => setAsciiSetting('asciiUseColor', e.target.checked)}
+                className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-[#666]">Invert Luma</label>
+              <input
+                type="checkbox"
+                checked={asciiInvert}
+                onChange={(e) => setAsciiSetting('asciiInvert', e.target.checked)}
+                className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+              />
+            </div>
+
+          </div>
+        )}
+
+        {/* Global Dither Params */}
+        <div className="space-y-4 pt-2">
+          {/* Dot Size (Scale) */}
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Dot Size</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{scale.toFixed(1)}x</span>
+            </div>
             <input
-              type="checkbox"
-              checked={serpentine}
-              onChange={(e) => setGlobalSetting('serpentine', e.target.checked)}
-              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+              type="range"
+              min="1"
+              max="8"
+              step="0.5"
+              value={scale}
+              onChange={(e) => setGlobalSetting('scale', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          {/* Dither Strength (Detail) */}
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Dither Strength</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{ditherStrength.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={ditherStrength}
+              onChange={(e) => setGlobalSetting('ditherStrength', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          {/* New Additions to Algorithm Section: Edge & Banding */}
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Edge Preservation</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{edgePreservation.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={edgePreservation}
+              onChange={(e) => setGlobalSetting('edgePreservation', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Banding Reduction</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{bandingReduction.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={bandingReduction}
+              onChange={(e) => setGlobalSetting('bandingReduction', Number(e.target.value))}
+              className={sliderClass}
             />
           </div>
         </div>
       </div>
-
       {/* ============================================ */}
-      {/* SECTION 2: COLORS & PALETTE */}
+      {/* SECTION 3: COLOR PALETTE */}
       {/* ============================================ */}
       <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">COLORS</h2>
+        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">COLOR PALETTE</h2>
+
+        {/* Retro Presets (Moved here) */}
+        <div className="mb-4">
+          <label className="block text-xs text-[#666] mb-2">Quick Presets</label>
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            {['gameboy', 'cga-mode4-palette1', 'nes', 'pico8', 'commodore64', 'macintosh', 'amber-mono', 'newspaper'].map(presetId => {
+              const preset = getPaletteById(presetId);
+              if (!preset) return null;
+              const isSelected = selectedRetroPreset === presetId;
+              return (
+                <button
+                  key={presetId}
+                  onClick={() => handleRetroPresetSelect(presetId)}
+                  className={`p-2 border text-[9px] text-center leading-tight transition-colors ${isSelected
+                    ? 'border-[#2a2a2a] bg-[#2a2a2a] text-white'
+                    : 'border-[#d0cdc4] hover:border-[#2a2a2a] text-[#666]'
+                    }`}
+                  title={preset.description}
+                >
+                  {preset.name.split(' ')[0]}
+                </button>
+              );
+            })}
+          </div>
+
+          <select
+            value={selectedRetroPreset || ''}
+            onChange={(e) => e.target.value && handleRetroPresetSelect(e.target.value)}
+            className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer hover:border-[#2a2a2a] mb-4"
+          >
+            <option value="">More presets...</option>
+            {Object.entries(paletteCategories).map(([category, presetIds]) => (
+              <optgroup key={category} label={category}>
+                {presetIds.map(id => {
+                  const preset = getPaletteById(id);
+                  if (!preset) return null;
+                  return (
+                    <option key={id} value={id}>
+                      {preset.name} ({preset.colors.length} colors)
+                    </option>
+                  );
+                })}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+
 
         {/* Color Count */}
         <div className="mb-4">
@@ -325,172 +724,246 @@ export default function SimplifiedSettings() {
             <option value={0}>RGB (Standard)</option>
             <option value={1}>LAB (Perceptual)</option>
             <option value={2}>Oklab (Modern)</option>
+            <option value={29}>Concentric</option>
+            <option value={30}>Custom SVG / Image</option>
           </select>
         </div>
-      </div>
 
-      {/* ============================================ */}
-      {/* SECTION 3: RETRO PRESETS */}
-      {/* ============================================ */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">RETRO PRESETS</h2>
-
-        {/* Quick Preset Buttons */}
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          {['gameboy', 'cga-mode4-palette1', 'nes', 'pico8', 'commodore64', 'macintosh', 'amber-mono', 'newspaper'].map(presetId => {
-            const preset = getPaletteById(presetId);
-            if (!preset) return null;
-            const isSelected = selectedRetroPreset === presetId;
-            return (
-              <button
-                key={presetId}
-                onClick={() => handleRetroPresetSelect(presetId)}
-                className={`p-2 border text-[9px] text-center leading-tight transition-colors ${
-                  isSelected
-                    ? 'border-[#2a2a2a] bg-[#2a2a2a] text-white'
-                    : 'border-[#d0cdc4] hover:border-[#2a2a2a] text-[#666]'
-                }`}
-                title={preset.description}
+        {/* Geometric Halftone Settings */}
+        {asciiMode === 0 && (
+          <>
+            {/* Halftone Shape Selector */}
+            <div className="mb-4">
+              <div className="flex justify-between mb-1">
+                <label className="text-[10px] font-bold tracking-wider text-[#666] uppercase">Geometric Shape</label>
+              </div>
+              <select
+                value={halftoneShape}
+                onChange={(e) => setHalftoneSetting('halftoneShape', Number(e.target.value))}
+                className="w-full p-2 bg-[#f5f3ee] text-[#2a2a2a] border border-[#d0cdc4] font-['JetBrains_Mono',monospace] text-xs focus:outline-none focus:border-[#2a2a2a] appearance-none cursor-pointer"
               >
-                {preset.name.split(' ')[0]}
-              </button>
-            );
-          })}
-        </div>
+                <option value={0}>Circle</option>
+                <option value={1}>Square</option>
+                <option value={2}>Diamond</option>
+                <option value={3}>Triangle</option>
+                <option value={4}>Line</option>
+              </select>
+            </div>
 
-        {/* Full Preset Dropdown */}
-        <select
-          value={selectedRetroPreset || ''}
-          onChange={(e) => e.target.value && handleRetroPresetSelect(e.target.value)}
-          className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer hover:border-[#2a2a2a]"
-        >
-          <option value="">More presets...</option>
-          {Object.entries(paletteCategories).map(([category, presetIds]) => (
-            <optgroup key={category} label={category}>
-              {presetIds.map(id => {
-                const preset = getPaletteById(id);
-                if (!preset) return null;
-                return (
-                  <option key={id} value={id}>
-                    {preset.name} ({preset.colors.length} colors)
-                  </option>
-                );
-              })}
-            </optgroup>
-          ))}
-        </select>
+            {/* Rotation */}
+            <div className="mb-4">
+              <div className="flex justify-between mb-1">
+                <label className="text-[10px] font-bold tracking-wider text-[#666] uppercase">Rotation</label>
+                <span className="text-[10px] text-[#2a2a2a]">{halftoneRotation}°</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="180"
+                step="1"
+                value={halftoneRotation}
+                onChange={(e) => setHalftoneSetting('halftoneRotation', Number(e.target.value))}
+                className={sliderClass}
+              />
+            </div>
+
+            {/* Spread (Overlap) */}
+            <div className="mb-4">
+              <div className="flex justify-between mb-1">
+                <label className="text-[10px] font-bold tracking-wider text-[#666] uppercase">Spread</label>
+                <span className="text-[10px] text-[#2a2a2a]">{halftoneSpread.toFixed(2)}</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1.5"
+                step="0.05"
+                value={halftoneSpread}
+                onChange={(e) => setHalftoneSetting('halftoneSpread', Number(e.target.value))}
+                className={sliderClass}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Character Scaling */}
+        {/* Character Scaling */}
       </div>
 
       {/* ============================================ */}
-      {/* SECTION 4: IMAGE ADJUSTMENTS */}
+      {/* SECTION 4: POST-PROCESSING */}
       {/* ============================================ */}
       <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">IMAGE</h2>
+        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">POST-PROCESSING</h2>
 
         <div className="space-y-4">
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Brightness</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{brightness.toFixed(2)}</span>
+              <label className="text-xs text-[#666]">VHS Effect</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{Math.round(vhsEffect * 100)}%</span>
             </div>
             <input
               type="range"
-              min="-1"
+              min="0"
               max="1"
-              step="0.01"
-              value={brightness}
-              onChange={(e) => setGlobalSetting('brightness', Number(e.target.value))}
+              step="0.05"
+              value={vhsEffect}
+              onChange={(e) => setGlobalSetting('vhsEffect', Number(e.target.value))}
               className={sliderClass}
             />
           </div>
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Contrast</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{contrast.toFixed(2)}</span>
+              <label className="text-xs text-[#666]">Edge Glow</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{Math.round(edgeGlow * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={edgeGlow}
+              onChange={(e) => setGlobalSetting('edgeGlow', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Emboss</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{Math.round(emboss * 100)}%</span>
             </div>
             <input
               type="range"
               min="0"
               max="2"
-              step="0.01"
-              value={contrast}
-              onChange={(e) => setGlobalSetting('contrast', Number(e.target.value))}
+              step="0.1"
+              value={emboss}
+              onChange={(e) => setGlobalSetting('emboss', Number(e.target.value))}
               className={sliderClass}
             />
           </div>
+        </div>
+      </div>
+      {/* ============================================ */}
+      {/* SECTION 5: DISPLAY EFFECTS */}
+      {/* ============================================ */}
+      <div className={sectionClass}>
+        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">DISPLAY EFFECTS</h2>
 
+        <div className="space-y-4">
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Detail</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{ditherStrength.toFixed(2)}</span>
+              <label className="text-xs text-[#666]">Scanlines</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{scanlines.toFixed(2)}</span>
             </div>
             <input
               type="range"
               min="0"
               max="1"
               step="0.01"
-              value={ditherStrength}
-              onChange={(e) => setGlobalSetting('ditherStrength', Number(e.target.value))}
-              className={sliderClass}
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Edge Preservation</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{edgePreservation.toFixed(2)}</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={edgePreservation}
-              onChange={(e) => setGlobalSetting('edgePreservation', Number(e.target.value))}
-              className={sliderClass}
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Banding Reduction</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{bandingReduction.toFixed(2)}</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={bandingReduction}
-              onChange={(e) => setGlobalSetting('bandingReduction', Number(e.target.value))}
+              value={scanlines}
+              onChange={(e) => setGlobalSetting('scanlines', Number(e.target.value))}
               className={sliderClass}
             />
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[#666]">Gamma Correction</span>
+            <span className="text-xs text-[#666]">RGB Phosphor</span>
             <input
               type="checkbox"
-              checked={gammaCorrect}
-              onChange={(e) => setGlobalSetting('gammaCorrect', e.target.checked)}
+              checked={phosphor}
+              onChange={(e) => setGlobalSetting('phosphor', e.target.checked)}
               className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Screen Curvature</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{curvature.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="0.5"
+              step="0.01"
+              value={curvature}
+              onChange={(e) => setGlobalSetting('curvature', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Vignette</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{vignette.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={vignette}
+              onChange={(e) => setGlobalSetting('vignette', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Chromatic Aberration</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{chromatic.toFixed(3)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="0.02"
+              step="0.001"
+              value={chromatic}
+              onChange={(e) => setGlobalSetting('chromatic', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Bloom / Glow</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{bloom.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={bloom}
+              onChange={(e) => setGlobalSetting('bloom', Number(e.target.value))}
+              className={sliderClass}
             />
           </div>
         </div>
       </div>
 
       {/* ============================================ */}
-      {/* SECTION 5: VIDEO / ANIMATION */}
+      {/* SECTION 6: VIDEO / WEBCAM */}
       {/* ============================================ */}
       <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">VIDEO / ANIMATION</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-medium text-[#2a2a2a]">VIDEO / WEBCAM</h2>
+          <button
+            onClick={() => setWebcam(!isWebcam)}
+            className={`text-[10px] px-2 py-1 border ${isWebcam ? 'bg-[#2a2a2a] text-white border-[#2a2a2a]' : 'bg-white text-[#2a2a2a] border-[#d0cdc4]'}`}
+          >
+            {isWebcam ? 'STOP WEBCAM' : 'USE WEBCAM'}
+          </button>
+        </div>
 
-        {!isVideo && (
-          <p className="text-[10px] text-[#999] mb-3">Load a video or GIF to enable these controls</p>
+        {(!isVideo && !isWebcam) && (
+          <p className="text-[10px] text-[#999] mb-3">Load a video or start webcam to enable these controls</p>
         )}
 
-        <div className={`space-y-4 ${!isVideo ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={`space-y-4 ${(!isVideo && !isWebcam) ? 'opacity-50 pointer-events-none' : ''}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs text-[#666]">Temporal Dither</span>
             <input
@@ -608,106 +1081,6 @@ export default function SimplifiedSettings() {
           </div>
         </div>
       </div>
-
-      {/* ============================================ */}
-      {/* SECTION 6: DISPLAY EFFECTS (CRT) */}
-      {/* ============================================ */}
-      <div>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">DISPLAY EFFECTS</h2>
-
-        <div className="space-y-4">
-          <div>
-            <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Scanlines</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{scanlines.toFixed(2)}</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={scanlines}
-              onChange={(e) => setGlobalSetting('scanlines', Number(e.target.value))}
-              className={sliderClass}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[#666]">RGB Phosphor</span>
-            <input
-              type="checkbox"
-              checked={phosphor}
-              onChange={(e) => setGlobalSetting('phosphor', e.target.checked)}
-              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Screen Curvature</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{curvature.toFixed(2)}</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="0.5"
-              step="0.01"
-              value={curvature}
-              onChange={(e) => setGlobalSetting('curvature', Number(e.target.value))}
-              className={sliderClass}
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Vignette</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{vignette.toFixed(2)}</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={vignette}
-              onChange={(e) => setGlobalSetting('vignette', Number(e.target.value))}
-              className={sliderClass}
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Chromatic Aberration</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{chromatic.toFixed(3)}</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="0.02"
-              step="0.001"
-              value={chromatic}
-              onChange={(e) => setGlobalSetting('chromatic', Number(e.target.value))}
-              className={sliderClass}
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Bloom / Glow</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{bloom.toFixed(2)}</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={bloom}
-              onChange={(e) => setGlobalSetting('bloom', Number(e.target.value))}
-              className={sliderClass}
-            />
-          </div>
-        </div>
-      </div>
-
-    </div>
+    </div >
   );
 }

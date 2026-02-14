@@ -4,6 +4,8 @@ export interface DitherState {
   // File state
   currentFile: File | null;
   isVideo: boolean;
+  isWebcam: boolean;
+  videoDuration: number; // Duration of loaded video in seconds
 
   // Algorithm state
   currentAlgorithm: number;
@@ -28,6 +30,7 @@ export interface DitherState {
   highlights: number;
   lumThreshold: number;
   blur: number;
+  pointSize: number;
   invert: boolean;
   grayscale: boolean;
 
@@ -65,6 +68,9 @@ export interface DitherState {
   pixelation: number;
   crtEffect: number;
   pixelAspectRatio: number;
+  vhsEffect: number;
+  edgeGlow: number;
+  emboss: number;
 
   // CRT Display Effects
   scanlines: number;
@@ -81,11 +87,35 @@ export interface DitherState {
   // Temporal coherence (video)
   temporalWeight: number;
 
+  // Comparison mode
+  comparisonMode: boolean;
+  comparisonPosition: number;
+
   // Performance
   fps: number;
 
+  //  // ASCII / Shape Effects
+  asciiCellSize: number;
+  asciiGap: number; // 0-1
+  asciiBaseScale: number; // For scaling the texture/shape inside cell
+  asciiIntensity: number; // 0-1
+  asciiMode: number; // 0=Characters, 1=Shapes
+  asciiShape: number; // 0=Circle, 1=Square, 2=X, 3=Cross, 4=Heart, etc.
+  asciiBgColor: string;
+  asciiFgColor: string;
+  asciiUseColor: boolean; // true = use source color for FG
+  asciiInvert: boolean;
+  customShapeTexture: string | null; // Data URL for custom SVG/Image
+
+  // Geometric Halftones (Efecto-style)
+  halftoneShape: number; // 0=Circle, 1=Square, 2=Diamond, 3=Triangle, 4=Line
+  halftoneRotation: number; // 0-360
+  halftoneSpread: number; // 0-2 (Controls overlap)
+
   // Actions
   setFile: (file: File | null, isVideo: boolean) => void;
+  setWebcam: (enabled: boolean) => void;
+  setVideoDuration: (duration: number) => void;
   setAlgorithm: (algo: number) => void;
   setMultiAlgo: (enabled: boolean, algo2?: number, blendMode?: number, blendAmount?: number) => void;
   setParam: (paramNum: 1 | 2 | 3 | 4, value: number) => void;
@@ -96,6 +126,12 @@ export interface DitherState {
   setFps: (fps: number) => void;
   setCustomPaletteColor: (index: number, color: string) => void;
   setCustomPalette: (colors: string[]) => void;
+  setComparisonMode: (enabled: boolean) => void;
+  setComparisonPosition: (position: number) => void;
+
+  setAsciiSetting: (key: string, value: number | string | boolean) => void;
+  setHalftoneSetting: (key: string, value: number) => void;
+  setCustomShape: (textureUrl: string | null) => void;
   surpriseMe: () => void;
 }
 
@@ -103,18 +139,20 @@ const defaultState = {
   // File state
   currentFile: null,
   isVideo: false,
+  isWebcam: false,
+  videoDuration: 0,
 
   // Algorithm state
-  currentAlgorithm: 22, // bayer4 default
+  currentAlgorithm: 1, // Floyd-Steinberg default
   multiAlgoEnabled: false,
   secondAlgorithm: 0,
   algoBlendMode: 0,
   algoBlendAmount: 0.5,
 
-  // Algorithm parameters
-  param1: 4.0,
-  param2: 1.0,
-  param3: 1.0,
+  // Algorithm parameters (Floyd-Steinberg defaults)
+  param1: 1.0,  // Diffusion Strength
+  param2: 0.3,  // Feedback
+  param3: 0.3,  // Error Clamping
   param4: 1.0,
 
   // Global settings
@@ -127,6 +165,7 @@ const defaultState = {
   highlights: 0.0,
   lumThreshold: 1.0,
   blur: 0.0,
+  pointSize: 4.0,
   invert: false,
   grayscale: false,
 
@@ -164,6 +203,9 @@ const defaultState = {
   pixelation: 1.0,
   crtEffect: 0.0,
   pixelAspectRatio: 1.0,
+  vhsEffect: 0.0,
+  edgeGlow: 0.0,
+  emboss: 0.0,
 
   // CRT Display Effects
   scanlines: 0.0,
@@ -180,14 +222,40 @@ const defaultState = {
   // Temporal coherence
   temporalWeight: 0.15,
 
+  // Comparison mode
+  comparisonMode: false,
+  comparisonPosition: 0.5,
+
   // Performance
   fps: 60,
+
+  // ASCII Defaults
+  asciiCellSize: 10,
+  asciiGap: 1.0,
+  asciiBaseScale: 0.9,
+  asciiIntensity: 1.0,
+  asciiMode: 1, // Halftone
+  asciiShape: 0, // Circle
+  asciiBgColor: '#111111',
+  asciiFgColor: '#ffffff',
+  asciiUseColor: true,
+  asciiInvert: false,
+  customShapeTexture: null,
+
+  // Geometric Halftones
+  halftoneShape: 0, // Circle
+  halftoneRotation: 0,
+  halftoneSpread: 0.1,
 };
 
 export const useDitherStore = create<DitherState>((set) => ({
   ...defaultState,
 
-  setFile: (file, isVideo) => set({ currentFile: file, isVideo }),
+  setFile: (file, isVideo) => set({ ...defaultState, currentFile: file, isVideo }),
+
+  setWebcam: (enabled) => set({ isWebcam: enabled }),
+
+  setVideoDuration: (duration) => set({ videoDuration: duration }),
 
   setAlgorithm: (algo) => set({ currentAlgorithm: algo }),
 
@@ -210,7 +278,12 @@ export const useDitherStore = create<DitherState>((set) => ({
   setAdvancedSetting: (key, value) =>
     set({ [key]: value } as any),
 
-  resetAll: () => set(defaultState),
+  resetAll: () => set((state) => ({
+    ...defaultState,
+    currentFile: state.currentFile,
+    isVideo: state.isVideo,
+    videoDuration: state.videoDuration,
+  })),
 
   setFps: (fps) => set({ fps }),
 
@@ -221,6 +294,21 @@ export const useDitherStore = create<DitherState>((set) => ({
       return { customPalette: newPalette };
     }),
   setCustomPalette: (colors) => set({ customPalette: colors }),
+
+  setComparisonMode: (enabled) => set({ comparisonMode: enabled }),
+  setComparisonPosition: (position) => set({ comparisonPosition: position }),
+
+  setAsciiSetting: (key, value) => {
+    set((state) => ({ ...state, [key]: value }));
+  },
+
+  setHalftoneSetting: (key, value) => {
+    set((state) => ({ ...state, [key]: value }));
+  },
+
+  setCustomShape: (textureUrl) => {
+    set((state) => ({ ...state, customShapeTexture: textureUrl }));
+  },
 
   surpriseMe: () => {
     // Random helper functions
@@ -294,6 +382,11 @@ export const useDitherStore = create<DitherState>((set) => ({
       vignette: applyCRT ? randomFloat(0, 0.25) : 0,
       chromatic: applyCRT ? randomFloat(0, 0.3) : 0,
       bloom: applyCRT ? randomFloat(0, 0.3) : 0,
+
+      // New Effects
+      vhsEffect: applyCRT ? randomFloat(0, 0.2) : 0,
+      edgeGlow: 0,
+      emboss: 0,
     });
   },
 }));

@@ -24,6 +24,7 @@ export default function AlgorithmSelector() {
     // Define category order for better UX
     const categoryOrder = [
       'None',
+      'Error Diffusion',
       'Error Diffusion (Classic)',
       'Error Diffusion (Sierra Family)',
       'Error Diffusion (Variants)',

@@ -2,33 +2,62 @@
   "name": "dither-saas",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3002",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "dev:desktop": "concurrently \"npm run dev\" \"wait-on http://localhost:3002/studio && electron .\"",
+    "build:desktop": "npm run build && electron-builder"
+  },
+  "build": {
+    "appId": "com.ditherstudio.app",
+    "productName": "Dither Studio",
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "target": "dmg"
+    },
+    "files": [
+      "electron/**/*",
+      ".next/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    }
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.34.1",
-    "@prisma/client": "^7.1.0",
+    "@prisma/adapter-pg": "^7.1.0",
+    "@prisma/extension-accelerate": "^3.0.1",
     "@types/three": "^0.181.0",
+    "better-auth": "^1.4.5",
+    "file-saver": "^2.0.5",
+    "gif.js": "^0.2.0",
+    "jszip": "^3.10.1",
     "next": "16.0.1",
-    "prisma": "^7.1.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "stripe": "^19.2.0",
-    "svix": "^1.82.0",
     "three": "^0.181.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/file-saver": "^2.0.7",
+    "@types/gif.js": "^0.2.5",
     "@types/node": "^20",
+    "@types/pg": "^8.15.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
+    "electron": "^40.2.1",
+    "electron-builder": "^26.7.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.0.3"
   }
 }

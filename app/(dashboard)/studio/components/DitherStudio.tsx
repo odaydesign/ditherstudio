@@ -1,11 +1,26 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { generateSVG } from '@/lib/utils/svgGenerator';
 import WebGLCanvas from './canvas/WebGLCanvas';
 import UploadZone from './controls/UploadZone';
 import SimplifiedSettings from './controls/SimplifiedSettings';
 import { useDitherStore } from '@/store/ditherStore';
+import GIF from 'gif.js';
+
+// Define Electron API interface
+interface ElectronAPI {
+  savePreset: (name: string, data: Record<string, unknown>) => Promise<{ success: boolean; preset?: DitherPreset; error?: string }>;
+  loadPreset: (name: string) => Promise<any>;
+  getPresets: () => Promise<DitherPreset[]>;
+  deletePreset: (id: string) => Promise<{ success: boolean; error?: string }>;
+}
+
+declare global {
+  interface Window {
+    electron?: ElectronAPI;
+  }
+}
 
 // Preset type for saving/loading settings
 interface DitherPreset {
@@ -204,10 +219,7 @@ const builtInPresets: DitherPreset[] = [
   },
 ];
 
-const STORAGE_KEY = 'dither-studio-presets';
-
 export default function DitherStudio() {
-  const { isSignedIn, isLoaded } = useUser();
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [jpegQuality, setJpegQuality] = useState(0.9);
   const [savedPresets, setSavedPresets] = useState<DitherPreset[]>([]);
@@ -218,46 +230,45 @@ export default function DitherStudio() {
   const [isSaving, setIsSaving] = useState(false);
   const presetInputRef = useRef<HTMLInputElement>(null);
 
-  // Load presets - from API if signed in, localStorage otherwise
-  const loadPresets = useCallback(async () => {
-    if (isSignedIn) {
-      setIsLoading(true);
-      try {
-        const res = await fetch('/api/presets');
-        if (res.ok) {
-          const data = await res.json();
-          setSavedPresets(data.presets || []);
-        }
-      } catch (error) {
-        console.error('Failed to load presets from API:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      // Load from localStorage for non-signed-in users
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          setSavedPresets(parsed);
-        } catch {
-          console.error('Failed to load presets from localStorage');
-        }
-      }
+  // Video/GIF Export State
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportDuration, setExportDuration] = useState(3); // seconds
+  const [exportFps, setExportFps] = useState(15);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+
+  // Get video duration from store and auto-update export duration
+  const { isVideo, videoDuration } = useDitherStore();
+  const ditherState = useDitherStore();
+
+  // Sync export duration with video duration
+  useEffect(() => {
+    if (isVideo && videoDuration > 0) {
+      setExportDuration(Math.round(videoDuration));
+      // Estimate FPS from video (default to 30 for most videos)
+      setExportFps(30);
     }
-  }, [isSignedIn]);
+  }, [isVideo, videoDuration]);
+
+  // Load presets via Electron IPC
+  const loadPresets = useCallback(async () => {
+    if (!window.electron) return;
+
+    setIsLoading(true);
+    try {
+      const presets = await window.electron.getPresets();
+      setSavedPresets(presets || []);
+    } catch (error) {
+      console.error('Failed to load presets:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (isLoaded) {
-      loadPresets();
-    }
-  }, [isLoaded, loadPresets]);
-
-  // Save presets to localStorage (for non-signed-in users)
-  const savePresetsToStorage = (presets: DitherPreset[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
-    setSavedPresets(presets);
-  };
+    loadPresets();
+  }, [loadPresets]);
 
   const getCurrentSettings = (): Record<string, unknown> => {
     const state = useDitherStore.getState();
@@ -336,41 +347,23 @@ export default function DitherStudio() {
   const saveNewPreset = async () => {
     if (!newPresetName.trim()) return;
 
+    if (!window.electron) {
+      alert('Not in Electron environment');
+      return;
+    }
+
     setIsSaving(true);
-
-    if (isSignedIn) {
-      // Save to API
-      try {
-        const res = await fetch('/api/presets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: newPresetName.trim(),
-            settings: getCurrentSettings(),
-          }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setSavedPresets(prev => [data.preset, ...prev]);
-          setSelectedPresetId(data.preset.id);
-        } else {
-          alert('Failed to save preset');
-        }
-      } catch (error) {
-        console.error('Error saving preset:', error);
-        alert('Failed to save preset');
+    try {
+      const result = await window.electron.savePreset(newPresetName.trim(), getCurrentSettings());
+      if (result.success && result.preset) {
+        setSavedPresets(prev => [result.preset!, ...prev]); // ! to assert existence
+        setSelectedPresetId(result.preset.id);
+      } else {
+        alert('Failed to save preset: ' + result.error);
       }
-    } else {
-      // Save to localStorage
-      const preset: DitherPreset = {
-        id: `local-${Date.now()}`,
-        name: newPresetName.trim(),
-        settings: getCurrentSettings(),
-      };
-      const updatedPresets = [preset, ...savedPresets];
-      savePresetsToStorage(updatedPresets);
-      setSelectedPresetId(preset.id);
+    } catch (error: any) {
+      console.error('Error saving preset:', error);
+      alert('Failed to save preset');
     }
 
     setIsSaving(false);
@@ -379,23 +372,23 @@ export default function DitherStudio() {
   };
 
   const deletePreset = async (presetId: string) => {
-    if (isSignedIn && !presetId.startsWith('local-')) {
-      // Delete from API
-      try {
-        const res = await fetch(`/api/presets/${presetId}`, { method: 'DELETE' });
-        if (res.ok) {
-          setSavedPresets(prev => prev.filter(p => p.id !== presetId));
-        } else {
-          alert('Failed to delete preset');
-        }
-      } catch (error) {
-        console.error('Error deleting preset:', error);
-        alert('Failed to delete preset');
+    // Only delete native file presets
+    if (!presetId.startsWith('file-')) {
+      return;
+    }
+
+    if (!window.electron) return;
+
+    try {
+      const result = await window.electron.deletePreset(presetId);
+      if (result.success) {
+        setSavedPresets(prev => prev.filter(p => p.id !== presetId));
+      } else {
+        alert('Failed to delete preset: ' + result.error);
       }
-    } else {
-      // Delete from localStorage
-      const updatedPresets = savedPresets.filter(p => p.id !== presetId);
-      savePresetsToStorage(updatedPresets);
+    } catch (error) {
+      console.error('Error deleting preset:', error);
+      alert('Failed to delete preset');
     }
 
     if (selectedPresetId === presetId) {
@@ -424,6 +417,21 @@ export default function DitherStudio() {
     setShowExportMenu(false);
   };
 
+  const handleExportSVG = () => {
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+      const svgString = generateSVG(canvas, ditherState); // ditherState is accessible from component scope
+      const blob = new Blob([svgString], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'dither-geometric.svg';
+      a.click();
+      URL.revokeObjectURL(url);
+      setShowExportMenu(false);
+    }
+  };
+
   const exportPresetFile = () => {
     const preset = {
       name: 'Exported Preset',
@@ -450,29 +458,12 @@ export default function DitherStudio() {
         const name = preset.name || 'Imported Preset';
         const settings = preset.settings;
 
-        if (isSignedIn) {
-          // Save to API
-          const res = await fetch('/api/presets', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, settings }),
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            setSavedPresets(prev => [data.preset, ...prev]);
-            applyPreset(data.preset);
+        if (window.electron) {
+          const result = await window.electron.savePreset(name, settings);
+          if (result.success && result.preset) {
+            setSavedPresets(prev => [result.preset!, ...prev]);
+            applyPreset(result.preset);
           }
-        } else {
-          // Save to localStorage
-          const newPreset: DitherPreset = {
-            id: `local-${Date.now()}`,
-            name,
-            settings,
-          };
-          const updatedPresets = [newPreset, ...savedPresets];
-          savePresetsToStorage(updatedPresets);
-          applyPreset(newPreset);
         }
       } catch {
         alert('Invalid preset file');
@@ -502,6 +493,102 @@ export default function DitherStudio() {
     URL.revokeObjectURL(url);
   };
 
+  // Export GIF
+  const exportGIF = useCallback(() => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return;
+
+    setIsExporting(true);
+    setExportProgress(0);
+
+    const gif = new GIF({
+      workers: 2,
+      quality: 10,
+      width: canvas.width,
+      height: canvas.height,
+      workerScript: '/gif.worker.js',
+    });
+
+    const totalFrames = exportDuration * exportFps;
+    const frameDelay = 1000 / exportFps;
+    let frameCount = 0;
+
+    const captureFrame = () => {
+      if (frameCount >= totalFrames) {
+        gif.render();
+        return;
+      }
+
+      gif.addFrame(canvas, { copy: true, delay: frameDelay });
+      frameCount++;
+      setExportProgress(Math.round((frameCount / totalFrames) * 100));
+      requestAnimationFrame(captureFrame);
+    };
+
+    gif.on('finished', (blob: Blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dithered-animation.gif`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setIsExporting(false);
+      setExportProgress(0);
+    });
+
+    captureFrame();
+  }, [exportDuration, exportFps]);
+
+  // Export Video (WebM)
+  const exportVideo = useCallback(() => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return;
+
+    setIsExporting(true);
+    setExportProgress(0);
+    recordedChunksRef.current = [];
+
+    const stream = canvas.captureStream(exportFps);
+    const mediaRecorder = new MediaRecorder(stream, {
+      mimeType: 'video/webm; codecs=vp9',
+    });
+
+    mediaRecorderRef.current = mediaRecorder;
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        recordedChunksRef.current.push(e.data);
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dithered-video.webm`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setIsExporting(false);
+      setExportProgress(0);
+    };
+
+    mediaRecorder.start();
+
+    // Progress tracking
+    let elapsed = 0;
+    const progressInterval = setInterval(() => {
+      elapsed += 100;
+      setExportProgress(Math.round((elapsed / (exportDuration * 1000)) * 100));
+    }, 100);
+
+    // Stop after duration
+    setTimeout(() => {
+      clearInterval(progressInterval);
+      mediaRecorder.stop();
+    }, exportDuration * 1000);
+  }, [exportDuration, exportFps]);
+
   const isUserPreset = (presetId: string) => {
     return !presetId.startsWith('builtin-');
   };
@@ -510,9 +597,14 @@ export default function DitherStudio() {
     <div className="h-screen grid grid-cols-[300px_400px_1fr] gap-0 bg-[#e8e5dd] font-['JetBrains_Mono',monospace] text-[13px] overflow-hidden">
       {/* Column 1: File Upload & Actions */}
       <div className="bg-[#e8e5dd] p-5 border-r border-[#d0cdc4] overflow-y-auto">
-        <div className="text-sm font-medium mb-6 text-[#2a2a2a]">DITHER.STUDIO</div>
+        <div
+          className="text-sm font-medium mb-6 mt-8 text-[#2a2a2a] select-none"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        >
+          DITHER.STUDIO
+        </div>
 
-        <div className="mb-8">
+        <div className="mb-8" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <div className="text-sm text-[#666] mb-2">/UPLOAD</div>
           <UploadZone />
         </div>
@@ -537,7 +629,7 @@ export default function DitherStudio() {
               ))}
             </optgroup>
             {savedPresets.length > 0 && (
-              <optgroup label={isSignedIn ? 'My Saved Presets' : 'Local Presets'}>
+              <optgroup label="My Presets">
                 {savedPresets.map(preset => (
                   <option key={preset.id} value={preset.id}>
                     {preset.name}
@@ -593,15 +685,8 @@ export default function DitherStudio() {
             </div>
           )}
 
-          {/* Storage info for non-signed-in users */}
-          {!isSignedIn && isLoaded && (
-            <p className="text-[10px] text-[#999] mt-2">
-              Sign in to save presets to your account
-            </p>
-          )}
-
           {/* Delete selected user preset */}
-          {selectedPresetId && isUserPreset(selectedPresetId) && (
+          {selectedPresetId && selectedPresetId.startsWith('file-') && (
             <button
               onClick={() => {
                 if (confirm('Delete this preset?')) {
@@ -650,7 +735,7 @@ export default function DitherStudio() {
                     step="0.1"
                     value={jpegQuality}
                     onChange={(e) => setJpegQuality(Number(e.target.value))}
-                    className="flex-1 h-1"
+                    className="flex-1 h-[2px] bg-[#d0cdc4] outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#2a2a2a] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-[#2a2a2a] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer"
                   />
                   <span className="text-[10px] text-[#2a2a2a] w-8">{Math.round(jpegQuality * 100)}%</span>
                 </div>
@@ -662,6 +747,16 @@ export default function DitherStudio() {
               >
                 EXPORT WEBP
               </button>
+
+              {/* SVG Export Option (New) */}
+              {ditherState.asciiMode === 0 && (
+                <button
+                  onClick={handleExportSVG}
+                  className="w-full text-left p-2 mb-2 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd]"
+                >
+                  EXPORT SVG (VECTOR)
+                </button>
+              )}
 
               <div className="border-t border-[#d0cdc4] pt-2 mt-2">
                 <div className="text-[10px] text-[#666] mb-2">PRESET FILE</div>
@@ -695,6 +790,63 @@ export default function DitherStudio() {
                   EXPORT PALETTE (.hex)
                 </button>
               </div>
+
+              {/* Video/GIF Export */}
+              <div className="border-t border-[#d0cdc4] pt-2 mt-2">
+                <div className="text-[10px] text-[#666] mb-2">VIDEO / GIF</div>
+
+                {/* Duration & FPS Controls */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] text-[#666]">Duration:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="30"
+                    value={exportDuration}
+                    onChange={(e) => setExportDuration(Number(e.target.value))}
+                    className="w-12 p-1 bg-white text-[#2a2a2a] border border-[#d0cdc4] font-['JetBrains_Mono',monospace] text-[10px] focus:outline-none"
+                  />
+                  <span className="text-[10px] text-[#666]">sec</span>
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] text-[#666]">FPS:</span>
+                  <input
+                    type="number"
+                    min="5"
+                    max="30"
+                    value={exportFps}
+                    onChange={(e) => setExportFps(Number(e.target.value))}
+                    className="w-12 p-1 bg-white text-[#2a2a2a] border border-[#d0cdc4] font-['JetBrains_Mono',monospace] text-[10px] focus:outline-none"
+                  />
+                </div>
+
+                {isExporting && (
+                  <div className="mb-2">
+                    <div className="text-[10px] text-[#666] mb-1">Exporting... {exportProgress}%</div>
+                    <div className="w-full h-1 bg-[#d0cdc4] rounded">
+                      <div
+                        className="h-1 bg-[#2a2a2a] rounded transition-all"
+                        style={{ width: `${exportProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={exportGIF}
+                  disabled={isExporting}
+                  className="w-full p-2 mb-1 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  EXPORT GIF
+                </button>
+                <button
+                  onClick={exportVideo}
+                  disabled={isExporting}
+                  className="w-full p-2 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  EXPORT VIDEO (WebM)
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -720,12 +872,16 @@ export default function DitherStudio() {
       </div>
 
       {/* Column 2: Controls */}
-      <div className="bg-[#e8e5dd] p-5 border-r border-[#d0cdc4] overflow-y-auto">
-        <SimplifiedSettings />
+      <div className="bg-[#e8e5dd] p-5 border-r border-[#d0cdc4] overflow-y-auto relative">
+        <div className="absolute top-0 left-0 right-0 h-6" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties} />
+        <div className="mt-8">
+          <SimplifiedSettings />
+        </div>
       </div>
 
       {/* Column 3: Canvas */}
       <div className="relative bg-[#e8e5dd]">
+        <div className="absolute top-0 left-0 right-0 h-6 z-10" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties} />
         <WebGLCanvas />
       </div>
     </div>
