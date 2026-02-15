@@ -2,7 +2,6 @@
 
 **Dither Studio** is a powerful, open-source desktop application for creating stunning dithered images and retro graphics. built with Next.js and Electron.
 
-![Dither Studio Screenshot](public/screenshot.png)
 
 ## 🚀 Key Features
 
