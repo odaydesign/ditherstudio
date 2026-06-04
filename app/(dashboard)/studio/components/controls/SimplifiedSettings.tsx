@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useDitherStore } from '@/store/ditherStore';
 import { paletteCategories, getPaletteById } from '@/lib/palettes/retroPalettes';
 import { algorithms } from '@/lib/three/algorithms';
+import GenerativePanel from './GenerativePanel';
 
 const PRESET_PALETTES = [
   { name: 'Black & White', dark: '#000000', light: '#FFFFFF' },
@@ -108,6 +109,8 @@ export default function SimplifiedSettings() {
     setGlobalSetting,
     brightness,
     contrast,
+    saturation,
+    hueShift,
     ditherStrength,
     colors,
     colorMode,
@@ -158,11 +161,23 @@ export default function SimplifiedSettings() {
     comparisonMode,
     setCustomShape,
     customShapeTexture,
+    gridMode,
+    gridAlgorithms,
+    autoTheme,
+    // New effects
+    sharpen,
+    posterize,
+    glitchIntensity,
+    glitchSpeed,
+    adaptiveThreshold,
+    adaptiveWindow,
     // Geometric Halftone
     halftoneShape,
     halftoneRotation,
     halftoneSpread,
-    setHalftoneSetting
+    setHalftoneSetting,
+    // Generative source (toggle lives in column 1 /SOURCE)
+    isGenerative,
   } = useDitherStore();
 
   const [selectedRetroPreset, setSelectedRetroPreset] = useState<string | null>(null);
@@ -217,6 +232,9 @@ export default function SimplifiedSettings() {
 
   return (
     <div className="space-y-1">
+      {/* Generative controls (when GENERATE source is active; toggle lives in column 1 /SOURCE) */}
+      {isGenerative && <GenerativePanel />}
+
       {/* ============================================ */}
       {/* SECTION 1: SOURCE IMAGE */}
       {/* ============================================ */}
@@ -256,6 +274,38 @@ export default function SimplifiedSettings() {
             />
           </div>
 
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Saturation</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{saturation.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="2"
+              step="0.01"
+              value={saturation}
+              onChange={(e) => setGlobalSetting('saturation', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Hue Shift</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{hueShift.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={hueShift}
+              onChange={(e) => setGlobalSetting('hueShift', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
           <div className="flex items-center justify-between">
             <span className="text-xs text-[#666]">Gamma Correction</span>
             <input
@@ -275,6 +325,35 @@ export default function SimplifiedSettings() {
               className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
             />
           </div>
+
+          <div className="flex items-center justify-between border-t border-[#d0cdc4] pt-2">
+            <span className="text-xs text-[#666] font-medium">Grid Comparison (4-way)</span>
+            <input
+              type="checkbox"
+              checked={gridMode}
+              onChange={(e) => setGlobalSetting('gridMode', e.target.checked)}
+              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+            />
+          </div>
+          
+          {gridMode && (
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {[0, 1, 2, 3].map(i => (
+                <select
+                  key={i}
+                  value={gridAlgorithms[i]}
+                  onChange={(e) => {
+                    const newAlgos = [...gridAlgorithms];
+                    newAlgos[i] = Number(e.target.value);
+                    setGlobalSetting('gridAlgorithms', newAlgos);
+                  }}
+                  className="w-full p-1 bg-[#f5f3ee] border border-[#d0cdc4] text-[9px] font-mono"
+                >
+                  {algorithms.map(a => <option key={a.id} value={a.shaderValue}>{a.name.split('(')[0]}</option>)}
+                </select>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -562,6 +641,51 @@ export default function SimplifiedSettings() {
             />
           </div>
 
+          <div className="pt-2 mt-2 border-t border-[#d0cdc4]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] text-[#666] font-bold uppercase tracking-wider">Adaptive Threshold</span>
+              <input
+                type="checkbox"
+                checked={adaptiveThreshold}
+                onChange={(e) => setGlobalSetting('adaptiveThreshold', e.target.checked)}
+                className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+              />
+            </div>
+            {adaptiveThreshold && (
+              <div className="mb-4">
+                <div className="flex justify-between mb-2">
+                  <label className="text-xs text-[#666]">Window Size</label>
+                  <span className="text-xs text-[#2a2a2a] font-mono">{adaptiveWindow}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="2"
+                  max="32"
+                  step="1"
+                  value={adaptiveWindow}
+                  onChange={(e) => setGlobalSetting('adaptiveWindow', Number(e.target.value))}
+                  className={sliderClass}
+                />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Pattern Jitter</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{patternRandomization.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={patternRandomization}
+              onChange={(e) => setGlobalSetting('patternRandomization', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
           {/* New Additions to Algorithm Section: Edge & Banding */}
           <div>
             <div className="flex justify-between mb-2">
@@ -604,7 +728,18 @@ export default function SimplifiedSettings() {
 
         {/* Retro Presets (Moved here) */}
         <div className="mb-4">
-          <label className="block text-xs text-[#666] mb-2">Quick Presets</label>
+          <div className="flex justify-between items-center mb-2">
+            <label className="text-xs text-[#666]">Quick Presets</label>
+            <button 
+              onClick={() => {
+                 const canvas = document.querySelector('canvas');
+                 if (canvas) autoTheme(canvas);
+              }}
+              className="text-[10px] font-bold text-[#2a2a2a] underline decoration-dotted"
+            >
+              AUTO-EXTRACT THEME
+            </button>
+          </div>
           <div className="grid grid-cols-4 gap-2 mb-3">
             {['gameboy', 'cga-mode4-palette1', 'nes', 'pico8', 'commodore64', 'macintosh', 'amber-mono', 'newspaper'].map(presetId => {
               const preset = getPaletteById(presetId);
@@ -841,6 +976,54 @@ export default function SimplifiedSettings() {
               step="0.1"
               value={emboss}
               onChange={(e) => setGlobalSetting('emboss', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Sharpen</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{sharpen.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1.0"
+              step="0.01"
+              value={sharpen}
+              onChange={(e) => setGlobalSetting('sharpen', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Posterize</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{posterize.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1.0"
+              step="0.01"
+              value={posterize}
+              onChange={(e) => setGlobalSetting('posterize', Number(e.target.value))}
+              className={sliderClass}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-xs text-[#666]">Glitch Intensity</label>
+              <span className="text-xs text-[#2a2a2a] font-mono">{glitchIntensity.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1.0"
+              step="0.01"
+              value={glitchIntensity}
+              onChange={(e) => setGlobalSetting('glitchIntensity', Number(e.target.value))}
               className={sliderClass}
             />
           </div>

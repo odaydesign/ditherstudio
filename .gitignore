@@ -45,3 +45,6 @@ next-env.d.ts
 /.clerk/
 
 /lib/generated/prisma
+
+# Playwright MCP test artifacts
+.playwright-mcp/

@@ -6,7 +6,9 @@ import WebGLCanvas from './canvas/WebGLCanvas';
 import UploadZone from './controls/UploadZone';
 import SimplifiedSettings from './controls/SimplifiedSettings';
 import { useDitherStore } from '@/store/ditherStore';
+import { generatorExport } from '@/lib/three/generatorController';
 import GIF from 'gif.js';
+import JSZip from 'jszip';
 
 // Define Electron API interface
 interface ElectronAPI {
@@ -219,9 +221,54 @@ const builtInPresets: DitherPreset[] = [
   },
 ];
 
+// Pick the best-supported MediaRecorder container/codec. Prefer MP4/H.264 for
+// portability (plays in QuickTime/Safari/most editors); fall back to WebM.
+const pickVideoMimeType = (): string => {
+  if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return '';
+  const candidates = [
+    'video/mp4;codecs=avc1.42E01E',
+    'video/mp4',
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm',
+  ];
+  for (const c of candidates) {
+    try { if (MediaRecorder.isTypeSupported(c)) return c; } catch { /* ignore */ }
+  }
+  return '';
+};
+
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// High bitrate scaled by pixels×fps for crisp 4K output (clamped 12–120 Mbps).
+const videoBitrate = (w: number, h: number, fps: number) =>
+  Math.min(120_000_000, Math.max(12_000_000, Math.round(w * h * fps * 0.15)));
+
+// Pick an H.264 codec string the browser can encode at this size/fps (4K needs a
+// high level). Returns '' when WebCodecs/H.264 isn't available.
+const pickAvcCodec = async (w: number, h: number, fps: number, bitrate: number): Promise<string> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const VE: any = (typeof window !== 'undefined') ? (window as any).VideoEncoder : undefined;
+  if (!VE?.isConfigSupported) return '';
+  for (const codec of ['avc1.640034', 'avc1.640033', 'avc1.4D4034', 'avc1.640028']) {
+    try {
+      const r = await VE.isConfigSupported({ codec, width: w, height: h, bitrate, framerate: fps });
+      if (r?.supported) return codec;
+    } catch { /* try next */ }
+  }
+  return '';
+};
+
 export default function DitherStudio() {
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [jpegQuality, setJpegQuality] = useState(0.9);
+  const [jpegQuality, setJpegQuality] = useState(0.95);
   const [savedPresets, setSavedPresets] = useState<DitherPreset[]>([]);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
@@ -235,6 +282,9 @@ export default function DitherStudio() {
   const [exportProgress, setExportProgress] = useState(0);
   const [exportDuration, setExportDuration] = useState(3); // seconds
   const [exportFps, setExportFps] = useState(15);
+  const [loopExport, setLoopExport] = useState(false);
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
 
@@ -396,40 +446,96 @@ export default function DitherStudio() {
     }
   };
 
+  // Export resolution: >= 4K long edge (preserving the output aspect) for generative
+  // backgrounds; the canvas's native size for uploaded media.
+  const exportDims = useCallback((): { w: number; h: number } => {
+    const s = useDitherStore.getState();
+    const c = document.querySelector('canvas');
+    if (!s.isGenerative) return { w: c?.width || s.outputWidth, h: c?.height || s.outputHeight };
+    let w = s.outputWidth, h = s.outputHeight;
+    const MIN_LONG = 3840; // 4K long edge
+    const long = Math.max(w, h);
+    if (long < MIN_LONG) { const k = MIN_LONG / long; w = Math.round(w * k); h = Math.round(h * k); }
+    return { w: w - (w % 2), h: h - (h % 2) };
+  }, []);
+
   const exportImage = (format: 'png' | 'jpeg' | 'webp') => {
-    const canvas = document.querySelector('canvas');
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
     if (!canvas) return;
-
     const mimeType = format === 'png' ? 'image/png' : format === 'jpeg' ? 'image/jpeg' : 'image/webp';
-    const quality = format === 'jpeg' ? jpegQuality : undefined;
+    const quality = format === 'jpeg' ? jpegQuality : format === 'webp' ? 0.95 : undefined;
+    const ext = format === 'jpeg' ? 'jpg' : format;
+    const s = useDitherStore.getState();
 
-    canvas.toBlob((blob) => {
-      if (blob) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `dithered-image.${format}`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
+    const grab = (after?: () => void) => canvas.toBlob((blob) => {
+      if (blob) downloadBlob(blob, `dither-${Date.now()}.${ext}`);
+      after?.();
     }, mimeType, quality);
 
+    // Generative stills render at >= 4K via a temporary hi-res pass.
+    if (s.isGenerative && generatorExport.beginExport && generatorExport.renderStillFrame) {
+      const { w, h } = exportDims();
+      generatorExport.beginExport(w, h);
+      generatorExport.renderStillFrame();
+      grab(() => generatorExport.endExport?.());
+    } else {
+      grab();
+    }
     setShowExportMenu(false);
   };
 
   const handleExportSVG = () => {
     const canvas = document.querySelector('canvas');
     if (canvas) {
-      const svgString = generateSVG(canvas, ditherState); // ditherState is accessible from component scope
+      const svgString = generateSVG(canvas, ditherState); 
       const blob = new Blob([svgString], { type: 'image/svg+xml' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'dither-geometric.svg';
+      a.download = `dither-${Date.now()}.svg`;
       a.click();
       URL.revokeObjectURL(url);
       setShowExportMenu(false);
     }
+  };
+
+  const exportBatch = async () => {
+    if (batchFiles.length === 0) return;
+    
+    setIsBatchProcessing(true);
+    setExportProgress(0);
+    
+    const zip = new JSZip();
+    const { setFile } = useDitherStore.getState();
+    
+    for (let i = 0; i < batchFiles.length; i++) {
+      const file = batchFiles[i];
+      setFile(file, file.type.startsWith('video/'));
+      
+      // Wait for render (roughly)
+      await new Promise(r => setTimeout(r, 1000));
+      
+      const canvas = document.querySelector('canvas');
+      if (canvas) {
+        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (blob) {
+          zip.file(`dithered-${file.name}.png`, blob);
+        }
+      }
+      
+      setExportProgress(Math.round(((i + 1) / batchFiles.length) * 100));
+    }
+    
+    const content = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(content);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dither-batch-${Date.now()}.zip`;
+    a.click();
+    
+    setIsBatchProcessing(false);
+    setBatchFiles([]);
+    setExportProgress(0);
   };
 
   const exportPresetFile = () => {
@@ -493,9 +599,24 @@ export default function DitherStudio() {
     URL.revokeObjectURL(url);
   };
 
-  // Export GIF
-  const exportGIF = useCallback(() => {
-    const canvas = document.querySelector('canvas');
+  // Plan a seamless loop: an integer number of motion cycles closest to the requested
+  // Duration, rendered as N deterministic frames (frame i at phase 2π·i/N). Because the
+  // frames tile whole cycles, frame N ≡ frame 0 — seamless at ANY fps/duration.
+  // Returns null when loop export isn't applicable (then we live-record instead).
+  const getLoopPlan = useCallback(() => {
+    const s = useDitherStore.getState();
+    if (!loopExport || !s.isGenerative || !s.generativeAnimate || s.generativeMotion === 6) return null;
+    if (!generatorExport.renderExportFrame) return null;
+    const period = (2 * Math.PI) / Math.max(s.generativeSpeed, 0.05); // seconds per cycle
+    const cycles = Math.max(1, Math.round(exportDuration / period));
+    const loopDuration = cycles * period;
+    const frames = Math.max(2, Math.round(loopDuration * exportFps));
+    return { loopDuration, frames };
+  }, [loopExport, exportDuration, exportFps]);
+
+  // Export GIF (loops by default in gif.js)
+  const exportGIF = useCallback(async () => {
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
     if (!canvas) return;
 
     setIsExporting(true);
@@ -508,86 +629,212 @@ export default function DitherStudio() {
       height: canvas.height,
       workerScript: '/gif.worker.js',
     });
-
-    const totalFrames = exportDuration * exportFps;
     const frameDelay = 1000 / exportFps;
-    let frameCount = 0;
 
-    const captureFrame = () => {
-      if (frameCount >= totalFrames) {
-        gif.render();
-        return;
+    gif.on('finished', (blob: Blob) => {
+      downloadBlob(blob, `dither-${Date.now()}.gif`);
+      setIsExporting(false);
+      setExportProgress(0);
+    });
+
+    const plan = getLoopPlan();
+    if (plan) {
+      // Deterministic seamless loop — render exactly N frames spanning whole cycles.
+      const { loopDuration, frames } = plan;
+      generatorExport.capturing = true;
+      try {
+        for (let i = 0; i < frames; i++) {
+          generatorExport.renderExportFrame?.((i / frames) * loopDuration);
+          gif.addFrame(canvas, { copy: true, delay: frameDelay });
+          setExportProgress(Math.round(((i + 1) / frames) * 100));
+          if (i % 4 === 0) await new Promise((r) => setTimeout(r, 0)); // keep UI responsive
+        }
+      } finally {
+        generatorExport.capturing = false;
       }
+      gif.render();
+      return;
+    }
 
+    // Live capture (non-loop)
+    const totalFrames = Math.max(1, Math.round(exportDuration * exportFps));
+    let frameCount = 0;
+    const captureFrame = () => {
+      if (frameCount >= totalFrames) { gif.render(); return; }
       gif.addFrame(canvas, { copy: true, delay: frameDelay });
       frameCount++;
       setExportProgress(Math.round((frameCount / totalFrames) * 100));
       requestAnimationFrame(captureFrame);
     };
+    captureFrame();
+  }, [exportFps, exportDuration, getLoopPlan]);
 
-    gif.on('finished', (blob: Blob) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `dithered-animation.gif`;
-      a.click();
-      URL.revokeObjectURL(url);
+  // Frame-accurate MP4 via WebCodecs: each frame gets an explicit timestamp AND
+  // duration, so there is no end-frame freeze (the MediaRecorder bug) and the loop
+  // is perfect. Renders at >= 4K. Returns false if WebCodecs/H.264 is unavailable.
+  const exportVideoWebCodecs = useCallback(async (
+    frames: number, fps: number, timeFn: (i: number) => number,
+  ): Promise<boolean> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w0 = (typeof window !== 'undefined' ? (window as any) : undefined);
+    if (!w0?.VideoEncoder || !w0?.VideoFrame) return false;
+    if (!generatorExport.beginExport || !generatorExport.renderExportFrame || !generatorExport.endExport) return false;
+
+    const { w, h } = exportDims();
+    const bitrate = videoBitrate(w, h, fps);
+    const codec = await pickAvcCodec(w, h, fps, bitrate);
+    if (!codec) return false;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let Muxer: any, ArrayBufferTarget: any;
+    try { ({ Muxer, ArrayBufferTarget } = await import('mp4-muxer')); } catch { return false; }
+
+    setIsExporting(true);
+    setExportProgress(0);
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+
+    const muxer = new Muxer({
+      target: new ArrayBufferTarget(),
+      video: { codec: 'avc', width: w, height: h, frameRate: fps },
+      fastStart: 'in-memory',
+    });
+    let encError: unknown = null;
+    const encoder = new w0.VideoEncoder({
+      output: (chunk: unknown, meta: unknown) => muxer.addVideoChunk(chunk, meta),
+      error: (e: unknown) => { encError = e; },
+    });
+    encoder.configure({ codec, width: w, height: h, bitrate, framerate: fps });
+
+    generatorExport.beginExport(w, h);
+    try {
+      const usPerFrame = 1_000_000 / fps;
+      const keyEvery = Math.max(1, Math.round(fps)); // ~1 keyframe / second
+      for (let i = 0; i < frames; i++) {
+        if (encError) throw encError;
+        generatorExport.renderExportFrame!(timeFn(i));
+        const frame = new w0.VideoFrame(canvas, { timestamp: Math.round(i * usPerFrame), duration: Math.round(usPerFrame) });
+        encoder.encode(frame, { keyFrame: i % keyEvery === 0 });
+        frame.close();
+        setExportProgress(Math.round(((i + 1) / frames) * 92));
+        while (encoder.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 4)); // backpressure at 4K
+      }
+      await encoder.flush();
+      muxer.finalize();
+      downloadBlob(new Blob([muxer.target.buffer], { type: 'video/mp4' }), `dither-${Date.now()}.mp4`);
+    } catch (e) {
+      console.error('WebCodecs export failed, falling back:', e);
+      try { encoder.close(); } catch { /* */ }
+      generatorExport.endExport();
       setIsExporting(false);
       setExportProgress(0);
-    });
+      return false;
+    }
+    try { encoder.close(); } catch { /* */ }
+    generatorExport.endExport();
+    setIsExporting(false);
+    setExportProgress(0);
+    return true;
+  }, [exportDims]);
 
-    captureFrame();
-  }, [exportDuration, exportFps]);
-
-  // Export Video (WebM)
-  const exportVideo = useCallback(() => {
-    const canvas = document.querySelector('canvas');
+  // Export Video — WebCodecs MP4 (>=4K, seamless) with a MediaRecorder fallback
+  const exportVideo = useCallback(async () => {
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
     if (!canvas) return;
+
+    // Preferred path for generated animations: deterministic frames -> 4K MP4.
+    const gs = useDitherStore.getState();
+    if (gs.isGenerative && gs.generativeAnimate) {
+      const loop = getLoopPlan();
+      const fps = exportFps;
+      const frames = loop ? loop.frames : Math.max(1, Math.round(exportDuration * fps));
+      const timeFn = loop ? (i: number) => (i / frames) * loop.loopDuration : (i: number) => i / fps;
+      const ok = await exportVideoWebCodecs(frames, fps, timeFn);
+      if (ok) return; // otherwise fall through to MediaRecorder
+    }
+
+    const mimeType = pickVideoMimeType();
+    if (!mimeType) {
+      alert('Video recording is not supported in this browser. Try GIF export, or use Chrome/Edge.');
+      return;
+    }
 
     setIsExporting(true);
     setExportProgress(0);
     recordedChunksRef.current = [];
 
-    const stream = canvas.captureStream(exportFps);
-    const mediaRecorder = new MediaRecorder(stream, {
-      mimeType: 'video/webm; codecs=vp9',
-    });
-
-    mediaRecorderRef.current = mediaRecorder;
-
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) {
-        recordedChunksRef.current.push(e.data);
-      }
+    const makeRecorder = (stream: MediaStream): MediaRecorder | null => {
+      try { return new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 16_000_000 }); }
+      catch { try { return new MediaRecorder(stream); } catch { return null; } }
     };
-
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `dithered-video.webm`;
-      a.click();
-      URL.revokeObjectURL(url);
+    const finish = (recorder: MediaRecorder) => {
+      const type = recorder.mimeType || mimeType;
+      const blob = new Blob(recordedChunksRef.current, { type });
       setIsExporting(false);
       setExportProgress(0);
+      if (blob.size === 0) { alert('No video frames were captured — make sure something is visible on the canvas.'); return; }
+      downloadBlob(blob, `dither-${Date.now()}.${type.includes('mp4') ? 'mp4' : 'webm'}`);
     };
 
-    mediaRecorder.start();
+    const plan = getLoopPlan();
+    if (plan) {
+      // Deterministic seamless loop: drive frames manually into the capture stream.
+      const { loopDuration, frames } = plan;
+      let stream: MediaStream;
+      let manual = true;
+      try { stream = canvas.captureStream(0); }
+      catch {
+        manual = false;
+        try { stream = canvas.captureStream(exportFps); }
+        catch { setIsExporting(false); alert('Could not capture the canvas for video export.'); return; }
+      }
+      const track = stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
+      const recorder = makeRecorder(stream);
+      if (!recorder) { setIsExporting(false); alert('Video recording failed to start in this browser.'); return; }
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data); };
+      recorder.onstop = () => finish(recorder);
+      recorder.onerror = () => { setIsExporting(false); setExportProgress(0); alert('Video recording error.'); };
+      recorder.start();
 
-    // Progress tracking
+      const frameMs = (loopDuration * 1000) / frames;
+      generatorExport.capturing = true;
+      try {
+        for (let i = 0; i < frames; i++) {
+          generatorExport.renderExportFrame?.((i / frames) * loopDuration);
+          if (manual && typeof track?.requestFrame === 'function') track.requestFrame();
+          setExportProgress(Math.round(((i + 1) / frames) * 100));
+          await new Promise((r) => setTimeout(r, frameMs));
+        }
+      } finally {
+        generatorExport.capturing = false;
+      }
+      if (recorder.state !== 'inactive') recorder.stop();
+      return;
+    }
+
+    // Live capture (non-loop)
+    let stream: MediaStream;
+    try { stream = canvas.captureStream(exportFps); }
+    catch { setIsExporting(false); alert('Could not capture the canvas for video export.'); return; }
+    const recorder = makeRecorder(stream);
+    if (!recorder) { setIsExporting(false); alert('Video recording failed to start in this browser.'); return; }
+    mediaRecorderRef.current = recorder;
+    recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data); };
+    recorder.onstop = () => finish(recorder);
+    recorder.onerror = () => { setIsExporting(false); setExportProgress(0); alert('Video recording error.'); };
+    recorder.start(100);
+
+    const duration = exportDuration;
     let elapsed = 0;
     const progressInterval = setInterval(() => {
       elapsed += 100;
-      setExportProgress(Math.round((elapsed / (exportDuration * 1000)) * 100));
+      setExportProgress(Math.min(99, Math.round((elapsed / (duration * 1000)) * 100)));
     }, 100);
-
-    // Stop after duration
     setTimeout(() => {
       clearInterval(progressInterval);
-      mediaRecorder.stop();
-    }, exportDuration * 1000);
-  }, [exportDuration, exportFps]);
+      if (recorder.state !== 'inactive') recorder.stop();
+    }, duration * 1000);
+  }, [exportFps, exportDuration, getLoopPlan, exportVideoWebCodecs]);
 
   const isUserPreset = (presetId: string) => {
     return !presetId.startsWith('builtin-');
@@ -605,8 +852,48 @@ export default function DitherStudio() {
         </div>
 
         <div className="mb-8" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          <div className="text-sm text-[#666] mb-2">/UPLOAD</div>
-          <UploadZone />
+          <div className="text-sm text-[#666] mb-2">/SOURCE</div>
+
+          {/* Upload vs Generate toggle (single source of truth) */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <button
+              onClick={() => useDitherStore.getState().setGenerativeEnabled(false)}
+              className={`p-2 text-xs border transition-colors ${!ditherState.isGenerative ? 'bg-[#2a2a2a] text-[#e8e5dd] border-[#2a2a2a]' : 'bg-transparent text-[#666] border-[#d0cdc4] hover:border-[#2a2a2a]'}`}
+            >
+              UPLOAD
+            </button>
+            <button
+              onClick={() => useDitherStore.getState().setGenerativeEnabled(true)}
+              className={`p-2 text-xs border transition-colors ${ditherState.isGenerative ? 'bg-[#2a2a2a] text-[#e8e5dd] border-[#2a2a2a]' : 'bg-transparent text-[#666] border-[#d0cdc4] hover:border-[#2a2a2a]'}`}
+            >
+              GENERATE
+            </button>
+          </div>
+
+          {!ditherState.isGenerative ? (
+            <>
+              <UploadZone onBatchSelect={(files) => setBatchFiles(files)} />
+              {batchFiles.length > 0 && (
+                <div className="mt-2 p-2 bg-[#f5f3ee] border border-[#d0cdc4] text-[10px]">
+                  <div className="flex justify-between items-center mb-2">
+                    <span>{batchFiles.length} FILES SELECTED</span>
+                    <button onClick={() => setBatchFiles([])} className="text-[#e74c3c]">CLEAR</button>
+                  </div>
+                  <button
+                    onClick={exportBatch}
+                    disabled={isBatchProcessing}
+                    className="w-full p-2 bg-[#2a2a2a] text-[#e8e5dd] transition-opacity hover:opacity-80 disabled:opacity-40"
+                  >
+                    {isBatchProcessing ? `PROCESSING ${exportProgress}%` : 'GENERATE BATCH ZIP'}
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="p-3 bg-[#f5f3ee] border border-[#d0cdc4] text-[10px] text-[#666] leading-relaxed">
+              ✦ Generating a background — tune the pattern, colours, grid, bands &amp; motion in the controls panel. Presets: Hotcoin, Tunnel, Aurora…
+            </div>
+          )}
         </div>
 
         {/* Presets Section */}
@@ -724,7 +1011,7 @@ export default function DitherStudio() {
                   onClick={() => exportImage('jpeg')}
                   className="w-full p-2 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd]"
                 >
-                  EXPORT JPEG
+                  EXPORT JPG
                 </button>
                 <div className="flex items-center mt-2 gap-2">
                   <span className="text-[10px] text-[#666]">Quality:</span>
@@ -813,12 +1100,33 @@ export default function DitherStudio() {
                   <input
                     type="number"
                     min="5"
-                    max="30"
+                    max="60"
                     value={exportFps}
                     onChange={(e) => setExportFps(Number(e.target.value))}
                     className="w-12 p-1 bg-white text-[#2a2a2a] border border-[#d0cdc4] font-['JetBrains_Mono',monospace] text-[10px] focus:outline-none"
                   />
                 </div>
+
+                {ditherState.isGenerative && ditherState.generativeAnimate && (
+                  <label className="flex items-center gap-2 mb-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={loopExport}
+                      onChange={(e) => setLoopExport(e.target.checked)}
+                      className="w-3.5 h-3.5 accent-[#2a2a2a]"
+                    />
+                    <span className="text-[10px] text-[#666]">
+                      🔁 Seamless loop
+                      {loopExport && ditherState.generativeMotion !== 6
+                        ? (() => {
+                            const period = (2 * Math.PI) / Math.max(ditherState.generativeSpeed, 0.05);
+                            const cycles = Math.max(1, Math.round(exportDuration / period));
+                            return ` · ${(cycles * period).toFixed(1)}s`;
+                          })()
+                        : ''}
+                    </span>
+                  </label>
+                )}
 
                 {isExporting && (
                   <div className="mb-2">
@@ -844,7 +1152,7 @@ export default function DitherStudio() {
                   disabled={isExporting}
                   className="w-full p-2 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  EXPORT VIDEO (WebM)
+                  EXPORT VIDEO (MP4 / WebM)
                 </button>
               </div>
             </div>

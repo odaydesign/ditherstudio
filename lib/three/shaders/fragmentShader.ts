@@ -22,6 +22,8 @@ export const fragmentShader = `
                     uniform bool uGrayscale;
                     uniform vec2 uResolution;
                     uniform float uTime;
+                    uniform float uSaturation;
+                    uniform float uHueShift;
                     uniform float uParam1, uParam2, uParam3, uParam4;
                     uniform float uScale, uMidtones, uHighlights, uLumThreshold, uBlur;
                     uniform float uPointSize;
@@ -111,6 +113,8 @@ export const fragmentShader = `
                     
                     uniform bool uComparison;
                     uniform float uComparisonPos;
+                    uniform bool uGridMode;
+                    uniform int uGridAlgorithms[4];
 
                     varying vec2 vUv;
 
@@ -419,6 +423,21 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                             -1.2684380046, 2.6097574011, -0.3413193965,
                             -0.0041960863, -0.7034186147, 1.7076147010
                         ) * lms;
+                    }
+
+                    vec3 rgb2hsv(vec3 c) {
+                        vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+                        vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+                        vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+                        float d = q.x - min(q.w, q.y);
+                        float e = 1.0e-10;
+                        return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+                    }
+
+                    vec3 hsv2rgb(vec3 c) {
+                        vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+                        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+                        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
                     }
 
                     float colorDistance(vec3 c1, vec3 c2) {
@@ -1013,55 +1032,55 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                         return mix(b, m, 0.7);
                     }
 
-                    // Get dither threshold based on selected algorithm
-                    float getDitherThreshold(vec2 coord) {
-                        vec2 uv = coord / uResolution;
-                        
-                        // Algorithm 0: No dithering
-                        if (uAlgorithm == 0) return noDither(coord);
-                        
-                        // Algorithm 1: Floyd-Steinberg
-                        if (uAlgorithm == 1) return floydSteinbergApprox(coord, uv);
-                        
-                        // Algorithm 3: Ostromoukhov
-                        if (uAlgorithm == 3) return ostromoukhovApprox(coord, uv);
-                        
-                        // Algorithm 4: Atkinson
-                        if (uAlgorithm == 4) return atkinsonApprox(coord, uv);
-
-                        // Algorithm 5: Stucki
-                        if (uAlgorithm == 5) return stuckiApprox(coord, uv);
-
-                        // Algorithm 6: Bayer
-                        if (uAlgorithm == 6) return bayerOrdered(coord);
-
-                        // Algorithm 7: Sierra Lite
-                        if (uAlgorithm == 7) return sierraLiteApprox(coord, uv);
-
-                        // Algorithm 8: Sierra 2-Row
-                        if (uAlgorithm == 8) return sierra2Approx(coord, uv);
-
-                        // Algorithm 9: Sierra 3-Row
-                        if (uAlgorithm == 9) return sierra3Approx(coord, uv);
-
-                        // Algorithm 10: Burkes
-                        if (uAlgorithm == 10) return burkesApprox(coord, uv);
-
-                        // Algorithm 11: Jarvis-Judice-Ninke
-                        if (uAlgorithm == 11) return jarvisApprox(coord, uv);
-
-                        // Algorithm 12: Halftone Dot
-                        if (uAlgorithm == 12) return halftoneDot(coord, uv);
-
-                        // Algorithm 13: Halftone Line
-                        if (uAlgorithm == 13) return halftoneLine(coord, uv);
-
-                        // Algorithm 14: Crosshatch
-                        if (uAlgorithm == 14) return crosshatch(coord, uv);
-
-                        // Default: no dithering
-                        return 0.5;
-                    }
+                     // Get dither threshold based on selected algorithm
+                     float getDitherThreshold(vec2 coord, int algorithm) {
+                         vec2 uv = coord / uResolution;
+                         
+                         // Algorithm 0: No dithering
+                         if (algorithm == 0) return noDither(coord);
+                         
+                         // Algorithm 1: Floyd-Steinberg
+                         if (algorithm == 1) return floydSteinbergApprox(coord, uv);
+                         
+                         // Algorithm 3: Ostromoukhov
+                         if (algorithm == 3) return ostromoukhovApprox(coord, uv);
+                         
+                         // Algorithm 4: Atkinson
+                         if (algorithm == 4) return atkinsonApprox(coord, uv);
+ 
+                         // Algorithm 5: Stucki
+                         if (algorithm == 5) return stuckiApprox(coord, uv);
+ 
+                         // Algorithm 6: Bayer
+                         if (algorithm == 6) return bayerOrdered(coord);
+ 
+                         // Algorithm 7: Sierra Lite
+                         if (algorithm == 7) return sierraLiteApprox(coord, uv);
+ 
+                         // Algorithm 8: Sierra 2-Row
+                         if (algorithm == 8) return sierra2Approx(coord, uv);
+ 
+                         // Algorithm 9: Sierra 3-Row
+                         if (algorithm == 9) return sierra3Approx(coord, uv);
+ 
+                         // Algorithm 10: Burkes
+                         if (algorithm == 10) return burkesApprox(coord, uv);
+ 
+                         // Algorithm 11: Jarvis-Judice-Ninke
+                         if (algorithm == 11) return jarvisApprox(coord, uv);
+ 
+                         // Algorithm 12: Halftone Dot
+                         if (algorithm == 12) return halftoneDot(coord, uv);
+ 
+                         // Algorithm 13: Halftone Line
+                         if (algorithm == 13) return halftoneLine(coord, uv);
+ 
+                         // Algorithm 14: Crosshatch
+                         if (algorithm == 14) return crosshatch(coord, uv);
+ 
+                         // Default: no dithering
+                         return 0.5;
+                     }
 
                     // ============================================================
                     // CRT / POST-PROCESSING EFFECTS
@@ -1069,6 +1088,13 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
 
                     vec3 applyCRTEffect(vec3 color, vec2 uv, float strength) {
                         vec3 result = color;
+
+                        // Chromatic Aberration
+                        if (uChromatic > 0.0) {
+                            float shift = uChromatic * 0.01;
+                            result.r = texture2D(tDiffuse, uv + vec2(shift, 0.0)).r;
+                            result.b = texture2D(tDiffuse, uv - vec2(shift, 0.0)).b;
+                        }
 
                         // Scanlines
                         if (uScanlines > 0.0) {
@@ -1086,8 +1112,20 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                         // Screen curvature
                         if (uCurvature > 0.0) {
                             vec2 curvedUv = uv * 2.0 - 1.0;
-                            float curve = 1.0 + uCurvature * 0.5;
-                            curvedUv *= 1.0 + pow(length(curvedUv), 2.0) * uCurvature * 0.1;
+                            float mag = dot(curvedUv, curvedUv);
+                            curvedUv *= 1.0 + mag * uCurvature * 0.1;
+                            result *= 1.0 - mag * uCurvature * 0.05;
+                        }
+
+                        // Phosphor Trail
+                        if (uPhosphor) {
+                            vec3 prev = texture2D(tPrevious, uv).rgb;
+                            result = mix(result, prev, 0.2);
+                        }
+
+                        // Bloom
+                        if (uBloom > 0.0) {
+                            result += max(vec3(0.0), result - 0.5) * uBloom;
                         }
 
                         return result;
@@ -1095,6 +1133,59 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
 
                     vec3 applyPostProcessing(vec3 color, vec2 uv) {
                         vec3 result = color;
+
+                        // Posterize
+                        if (uPosterize > 0.0) {
+                            float steps = mix(256.0, 4.0, uPosterize);
+                            result = floor(result * steps + 0.5) / steps;
+                        }
+
+                        // Sharpen
+                        if (uSharpen > 0.0) {
+                            vec2 off = 1.0 / uResolution;
+                            vec3 neighborhood = texture2D(tDiffuse, uv + vec2(0.0, off.y)).rgb +
+                                               texture2D(tDiffuse, uv - vec2(0.0, off.y)).rgb +
+                                               texture2D(tDiffuse, uv + vec2(off.x, 0.0)).rgb +
+                                               texture2D(tDiffuse, uv - vec2(off.x, 0.0)).rgb;
+                            result = mix(result, result * 5.0 - neighborhood, uSharpen * 0.5);
+                        }
+
+                        // VHS Jitter/Noise
+                        if (uVhsEffect > 0.0) {
+                            float jitter = hash(vec2(uTime, uv.y)) * 0.01 * uVhsEffect;
+                            float noise = hash(uv + uTime) * 0.1 * uVhsEffect;
+                            result += noise;
+                            result.r = texture2D(tDiffuse, uv + vec2(jitter, 0.0)).r;
+                        }
+
+                        // Glitch
+                        if (uGlitchIntensity > 0.0) {
+                            float gTime = uTime * uGlitchSpeed;
+                            float block = floor(uv.y * 10.0 + gTime);
+                            if (hash(vec2(block, gTime)) > 1.0 - uGlitchIntensity * 0.3) {
+                                result = texture2D(tDiffuse, uv + vec2(hash(vec2(block)) * 0.1, 0.0)).rgb;
+                            }
+                        }
+
+                        // Edge Glow
+                        if (uEdgeGlow > 0.0) {
+                            vec2 off = 1.0 / uResolution;
+                            float l = toGray(result);
+                            float r = toGray(texture2D(tDiffuse, uv + vec2(off.x, 0.0)).rgb);
+                            float d = toGray(texture2D(tDiffuse, uv + vec2(0.0, off.y)).rgb);
+                            float edge = abs(l - r) + abs(l - d);
+                            result += vec3(edge) * uEdgeGlow;
+                        }
+
+                        // Emboss
+                        if (uEmboss > 0.0) {
+                            vec2 off = 1.0 / uResolution;
+                            vec3 c = texture2D(tDiffuse, uv).rgb;
+                            vec3 ne = texture2D(tDiffuse, uv + vec2(off.x, off.y)).rgb;
+                            vec3 sw = texture2D(tDiffuse, uv - vec2(off.x, off.y)).rgb;
+                            float embossed = toGray(ne) - toGray(sw) + 0.5;
+                            result = mix(result, vec3(embossed), uEmboss * 0.5);
+                        }
 
                         // Film grain
                         if (uFilmGrain > 0.0) {
@@ -1108,7 +1199,7 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                             result += noise * uNoise;
                         }
 
-                        return clamp(result, 0.0, 1.0);
+                        return result;
                     }
 
                     // ============================================================
@@ -1446,12 +1537,50 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                             color = srgbToLinear(color);
                         }
 
-                        // Get dither threshold from selected algorithm
-                        float ditherPattern = getDitherThreshold(coord);
+                         // Get dither threshold from selected algorithm
+                         int activeAlgo = uAlgorithm;
+                         if (uGridMode) {
+                            if (vUv.x < 0.5 && vUv.y > 0.5) activeAlgo = uGridAlgorithms[0];
+                            else if (vUv.x >= 0.5 && vUv.y > 0.5) activeAlgo = uGridAlgorithms[1];
+                            else if (vUv.x < 0.5 && vUv.y <= 0.5) activeAlgo = uGridAlgorithms[2];
+                            else activeAlgo = uGridAlgorithms[3];
+                         }
+                         float ditherPattern = getDitherThreshold(coord, activeAlgo);
+
+                         // Adaptive Thresholding logic
+                         if (uAdaptiveThreshold) {
+                            float windowScale = float(uAdaptiveWindow);
+                            float avgLuma = toGray(getAverageColor(vUv, windowScale, uResolution));
+                            ditherPattern = mix(ditherPattern, avgLuma, 0.5);
+                         }
+
+                         // Pattern Randomization
+                         if (uPatternRandomization > 0.0) {
+                            ditherPattern = mix(ditherPattern, hash(coord + uTime), uPatternRandomization);
+                         }
+
+                         // Temporal Dithering
+                         if (uTemporalDither) {
+                            ditherPattern = fract(ditherPattern + uTime * uTemporalSpeed);
+                         }
 
                         // Calculate number of levels from colors
                         float numLevels = float(uColors);
                         float levelScale = numLevels - 1.0;
+
+                        // Banding Reduction (Dither before quantization)
+                        if (uBandingReduction > 0.0) {
+                           float bandNoise = (hash(coord + uTime) * 2.0 - 1.0) * (1.0 / levelScale) * uBandingReduction;
+                           color += vec3(bandNoise);
+                        }
+
+                        // Motion Adaptive Calculation
+                        float motionFactor = 1.0;
+                        if (uMotionAdaptive) {
+                           vec3 prevColor = texture2D(tPrevious, sampleUv).rgb;
+                           float diff = distance(color, prevColor);
+                           motionFactor = 1.0 - smoothstep(0.0, uMotionSensitivity, diff);
+                        }
 
                         vec3 dithered;
 
@@ -1473,6 +1602,15 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                             }
 
                             workingColor = (workingColor - 0.5) * uContrast + 0.5 + uBrightness;
+                            
+                            // Apply Hue & Saturation
+                            if (uSaturation != 1.0 || uHueShift != 0.0) {
+                               vec3 hsv = rgb2hsv(workingColor);
+                               hsv.x = fract(hsv.x + uHueShift);
+                               hsv.y *= uSaturation;
+                               workingColor = hsv2rgb(hsv);
+                            }
+
                             workingColor = clamp(workingColor, 0.0, 1.0);
 
                             dithered.r = floor(workingColor.r * levelScale + ditherPattern * uDitherStrength) / levelScale;
@@ -1488,12 +1626,15 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                             }
                         }
 
-                        // Temporal coherence
-                        if (uTemporalWeight > 0.01) {
+                        // Temporal coherence / Motion Adaptive
+                        float blendVal = uTemporalWeight;
+                        if (uMotionAdaptive) blendVal *= motionFactor;
+
+                        if (blendVal > 0.01) {
                             vec3 previousColor = texture2D(tPrevious, vUv).rgb;
                             float prevLum = dot(previousColor, vec3(0.299, 0.587, 0.114));
                             if (prevLum > 0.01) {
-                                dithered = mix(dithered, previousColor, uTemporalWeight);
+                                dithered = mix(dithered, previousColor, blendVal);
                             }
                         }
 
@@ -1566,6 +1707,14 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                             
                             // Draw separator line
                             if (abs(gl_FragCoord.x - splitX) < 1.0) {
+                                dithered = vec3(1.0) - dithered;
+                            }
+                        }
+
+                        if (uGridMode) {
+                            // Draw grid lines
+                            float gridAA = 1.0;
+                            if (abs(vUv.x - 0.5) < gridAA/uResolution.x || abs(vUv.y - 0.5) < gridAA/uResolution.y) {
                                 dithered = vec3(1.0) - dithered;
                             }
                         }

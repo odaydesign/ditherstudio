@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { extractPalette } from '@/lib/utils/colorExtractor';
 
 export interface DitherState {
   // File state
@@ -6,6 +7,48 @@ export interface DitherState {
   isVideo: boolean;
   isWebcam: boolean;
   videoDuration: number; // Duration of loaded video in seconds
+  isGenerative: boolean; // Procedural generative-background source
+
+  // Output canvas size (used by generative mode for presentation export)
+  outputWidth: number;
+  outputHeight: number;
+  outputAspect: string; // '16:9' | '1:1' | '9:16' | '4:3' | 'custom'
+
+  // Generative background config (independent of the dither palette)
+  generativePattern: number; // 0 linear,1 radial,2 conic,3 mesh,4 flow,5 waves,6 cellular
+  generativeColors: string[]; // 2..8 gradient stops (hex)
+  generativeAngle: number; // degrees
+  generativeScale: number;
+  generativeWarp: number;
+  generativeWarpFreq: number;
+  generativeGrain: number;
+  generativeContrast: number;
+  generativeBlend: number; // 0 smooth .. 1 stepped
+  generativeAnimate: boolean;
+  generativeMotion: number; // 1 drift,2 pulse,3 hue-cycle,4 swirl
+  generativeSpeed: number;
+  generativeSeed: number;
+  generativeGridCols: number; // grid quantization columns (0 = off)
+  generativeGridRows: number; // grid quantization rows (0 = off)
+  generativeSteps: number; // posterize the field into N bands (0 = off)
+  generativeBPM: number; // strobe beats per minute
+  // Symmetry & composition
+  generativeMirror: number; // 0 none,1 X,2 Y,3 quad,4 kaleidoscope
+  generativeKaleido: number; // kaleidoscope segments
+  generativeTileX: number; // repeat X (1 = off)
+  generativeTileY: number; // repeat Y (1 = off)
+  generativeVignette: number; // edge darkening 0..1
+  generativeBorder: number; // inset frame width (0 = off)
+  generativeBorderColor: string;
+  // Text / logo overlay
+  overlayEnabled: boolean;
+  overlayText: string;
+  overlayTextColor: string;
+  overlaySize: number; // % of canvas height
+  overlayX: number; // 0..1
+  overlayY: number; // 0..1
+  overlayLogo: string | null; // data URL
+  overlayLogoScale: number; // fraction of canvas height
 
   // Algorithm state
   currentAlgorithm: number;
@@ -24,6 +67,8 @@ export interface DitherState {
   threshold: number;
   contrast: number;
   brightness: number;
+  saturation: number;
+  hueShift: number;
   colors: number;
   scale: number;
   midtones: number;
@@ -79,6 +124,10 @@ export interface DitherState {
   vignette: number;
   chromatic: number;
   bloom: number;
+  sharpen: number;
+  posterize: number;
+  glitchIntensity: number;
+  glitchSpeed: number;
 
   // Palette mode
   paletteColors: string[];
@@ -90,11 +139,13 @@ export interface DitherState {
   // Comparison mode
   comparisonMode: boolean;
   comparisonPosition: number;
+  gridMode: boolean; // NEW: 4-way comparison grid
+  gridAlgorithms: number[]; // List of 4 algorithms for the grid
 
   // Performance
   fps: number;
 
-  //  // ASCII / Shape Effects
+  // ASCII / Shape Effects
   asciiCellSize: number;
   asciiGap: number; // 0-1
   asciiBaseScale: number; // For scaling the texture/shape inside cell
@@ -119,7 +170,7 @@ export interface DitherState {
   setAlgorithm: (algo: number) => void;
   setMultiAlgo: (enabled: boolean, algo2?: number, blendMode?: number, blendAmount?: number) => void;
   setParam: (paramNum: 1 | 2 | 3 | 4, value: number) => void;
-  setGlobalSetting: (key: string, value: number | boolean | string) => void;
+  setGlobalSetting: (key: string, value: number | boolean | string | any) => void;
   setColorMode: (mode: number) => void;
   setAdvancedSetting: (key: string, value: number | boolean) => void;
   resetAll: () => void;
@@ -128,11 +179,22 @@ export interface DitherState {
   setCustomPalette: (colors: string[]) => void;
   setComparisonMode: (enabled: boolean) => void;
   setComparisonPosition: (position: number) => void;
+  setGridMode: (enabled: boolean) => void;
+  setGridAlgorithms: (algos: number[]) => void;
 
   setAsciiSetting: (key: string, value: number | string | boolean) => void;
   setHalftoneSetting: (key: string, value: number) => void;
   setCustomShape: (textureUrl: string | null) => void;
   surpriseMe: () => void;
+  autoTheme: (canvas: HTMLCanvasElement) => void; // NEW: Intelligent palette extraction
+
+  // Generative background actions
+  setGenerativeEnabled: (enabled: boolean) => void;
+  setGenerativeSetting: (key: string, value: number | boolean | string) => void;
+  setGenerativeColors: (colors: string[]) => void;
+  setGenerativeColor: (index: number, color: string) => void;
+  setOutputSize: (width: number, height: number, aspect?: string) => void;
+  randomizeGenerative: () => void;
 }
 
 const defaultState = {
@@ -141,6 +203,46 @@ const defaultState = {
   isVideo: false,
   isWebcam: false,
   videoDuration: 0,
+  isGenerative: false,
+
+  // Output canvas size
+  outputWidth: 1920,
+  outputHeight: 1080,
+  outputAspect: '16:9',
+
+  // Generative background config (defaults echo the green->cream reference)
+  generativePattern: 3, // Mesh gradient
+  generativeColors: ['#0a1f12', '#2f5d3a', '#8fae6b', '#d8c39a', '#f3e9da'],
+  generativeAngle: 45,
+  generativeScale: 1.0,
+  generativeWarp: 0.25,
+  generativeWarpFreq: 1.0,
+  generativeGrain: 0.0,
+  generativeContrast: 1.0,
+  generativeBlend: 0.0,
+  generativeAnimate: false,
+  generativeMotion: 1, // Drift
+  generativeSpeed: 0.5,
+  generativeSeed: 2.0,
+  generativeGridCols: 0,
+  generativeGridRows: 0,
+  generativeSteps: 0,
+  generativeBPM: 120,
+  generativeMirror: 0,
+  generativeKaleido: 6,
+  generativeTileX: 1,
+  generativeTileY: 1,
+  generativeVignette: 0,
+  generativeBorder: 0,
+  generativeBorderColor: '#000000',
+  overlayEnabled: false,
+  overlayText: '',
+  overlayTextColor: '#ffffff',
+  overlaySize: 8,
+  overlayX: 0.5,
+  overlayY: 0.5,
+  overlayLogo: null,
+  overlayLogoScale: 0.16,
 
   // Algorithm state
   currentAlgorithm: 1, // Floyd-Steinberg default
@@ -159,6 +261,8 @@ const defaultState = {
   threshold: 0.5,
   contrast: 1.0,
   brightness: 0.0,
+  saturation: 1.0,
+  hueShift: 0.0,
   colors: 2,
   scale: 1.0,
   midtones: 0.0,
@@ -214,6 +318,10 @@ const defaultState = {
   vignette: 0.0,
   chromatic: 0.0,
   bloom: 0.0,
+  sharpen: 0.0,
+  posterize: 0.0,
+  glitchIntensity: 0.0,
+  glitchSpeed: 1.0,
 
   // Palette mode
   paletteColors: Array(16).fill('#000000'),
@@ -225,6 +333,8 @@ const defaultState = {
   // Comparison mode
   comparisonMode: false,
   comparisonPosition: 0.5,
+  gridMode: false,
+  gridAlgorithms: [1, 2, 3, 22], // Default grid: Floyd, Bayer, Atkinson, Blue Noise
 
   // Performance
   fps: 60,
@@ -253,7 +363,7 @@ export const useDitherStore = create<DitherState>((set) => ({
 
   setFile: (file, isVideo) => set({ ...defaultState, currentFile: file, isVideo }),
 
-  setWebcam: (enabled) => set({ isWebcam: enabled }),
+  setWebcam: (enabled) => set(enabled ? { isWebcam: true, isGenerative: false } : { isWebcam: false }),
 
   setVideoDuration: (duration) => set({ videoDuration: duration }),
 
@@ -283,6 +393,44 @@ export const useDitherStore = create<DitherState>((set) => ({
     currentFile: state.currentFile,
     isVideo: state.isVideo,
     videoDuration: state.videoDuration,
+    // Preserve the active source + generative config so RESET ALL only
+    // resets dither/colour/fx params, not your generated background.
+    isGenerative: state.isGenerative,
+    outputWidth: state.outputWidth,
+    outputHeight: state.outputHeight,
+    outputAspect: state.outputAspect,
+    generativePattern: state.generativePattern,
+    generativeColors: state.generativeColors,
+    generativeAngle: state.generativeAngle,
+    generativeScale: state.generativeScale,
+    generativeWarp: state.generativeWarp,
+    generativeWarpFreq: state.generativeWarpFreq,
+    generativeGrain: state.generativeGrain,
+    generativeContrast: state.generativeContrast,
+    generativeBlend: state.generativeBlend,
+    generativeAnimate: state.generativeAnimate,
+    generativeMotion: state.generativeMotion,
+    generativeSpeed: state.generativeSpeed,
+    generativeSeed: state.generativeSeed,
+    generativeGridCols: state.generativeGridCols,
+    generativeGridRows: state.generativeGridRows,
+    generativeSteps: state.generativeSteps,
+    generativeBPM: state.generativeBPM,
+    generativeMirror: state.generativeMirror,
+    generativeKaleido: state.generativeKaleido,
+    generativeTileX: state.generativeTileX,
+    generativeTileY: state.generativeTileY,
+    generativeVignette: state.generativeVignette,
+    generativeBorder: state.generativeBorder,
+    generativeBorderColor: state.generativeBorderColor,
+    overlayEnabled: state.overlayEnabled,
+    overlayText: state.overlayText,
+    overlayTextColor: state.overlayTextColor,
+    overlaySize: state.overlaySize,
+    overlayX: state.overlayX,
+    overlayY: state.overlayY,
+    overlayLogo: state.overlayLogo,
+    overlayLogoScale: state.overlayLogoScale,
   })),
 
   setFps: (fps) => set({ fps }),
@@ -295,19 +443,81 @@ export const useDitherStore = create<DitherState>((set) => ({
     }),
   setCustomPalette: (colors) => set({ customPalette: colors }),
 
+  // ---- Generative background ----
+  setGenerativeEnabled: (enabled) =>
+    set(enabled
+      // Tasteful baseline so a bare GENERATE looks good: full colour (not the
+      // app's B&W duotone) with enough levels to keep the gradient smooth.
+      // Presets can still override colour mode / levels.
+      ? { isGenerative: true, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      : { isGenerative: false }),
+
+  setGenerativeSetting: (key, value) => set({ [key]: value } as any),
+
+  setGenerativeColors: (colors) => set({ generativeColors: colors }),
+
+  setGenerativeColor: (index, color) =>
+    set((state) => {
+      const next = [...state.generativeColors];
+      next[index] = color;
+      return { generativeColors: next };
+    }),
+
+  setOutputSize: (width, height, aspect) =>
+    set({
+      outputWidth: Math.max(16, Math.round(width)),
+      outputHeight: Math.max(16, Math.round(height)),
+      ...(aspect ? { outputAspect: aspect } : {}),
+    }),
+
+  randomizeGenerative: () => {
+    const rf = (min: number, max: number) => Math.random() * (max - min) + min;
+    const ri = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+    const rhex = () => '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+    const count = ri(3, 6);
+    const colors = Array.from({ length: count }, () => rhex());
+    set({
+      generativePattern: ri(0, 6),
+      generativeColors: colors,
+      generativeAngle: rf(0, 360),
+      generativeScale: rf(0.5, 2.5),
+      generativeWarp: rf(0, 0.6),
+      generativeWarpFreq: rf(0.5, 2.0),
+      generativeContrast: rf(0.85, 1.6),
+      generativeBlend: Math.random() > 0.7 ? rf(0.3, 1.0) : 0,
+      generativeMotion: ri(1, 4),
+      generativeSeed: rf(0, 10),
+    });
+  },
+
   setComparisonMode: (enabled) => set({ comparisonMode: enabled }),
   setComparisonPosition: (position) => set({ comparisonPosition: position }),
+  setGridMode: (enabled) => set({ gridMode: enabled }),
+  setGridAlgorithms: (algos) => set({ gridAlgorithms: algos }),
 
   setAsciiSetting: (key, value) => {
-    set((state) => ({ ...state, [key]: value }));
+    set((state: any) => ({ ...state, [key]: value }));
   },
 
   setHalftoneSetting: (key, value) => {
-    set((state) => ({ ...state, [key]: value }));
+    set((state: any) => ({ ...state, [key]: value }));
   },
 
   setCustomShape: (textureUrl) => {
     set((state) => ({ ...state, customShapeTexture: textureUrl }));
+  },
+
+  autoTheme: (canvas) => {
+    const palette = extractPalette(canvas, 8);
+    if (palette.length > 0) {
+      set({ 
+        customPalette: palette,
+        colorMode: 4, // Palette mode
+        paletteSize: palette.length,
+        duotoneDark: palette[0],
+        duotoneLight: palette[palette.length - 1]
+      });
+    }
   },
 
   surpriseMe: () => {

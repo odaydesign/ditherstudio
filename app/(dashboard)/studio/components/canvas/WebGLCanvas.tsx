@@ -5,6 +5,52 @@ import * as THREE from 'three';
 import { useDitherStore } from '@/store/ditherStore';
 import { vertexShader } from '@/lib/three/shaders/vertexShader';
 import { fragmentShader } from '@/lib/three/shaders/fragmentShader';
+import { generatorShader } from '@/lib/three/shaders/generatorShader';
+import { generatorExport } from '@/lib/three/generatorController';
+
+// The fragment shader declares `uniform vec3 uPaletteColors[16]` — a fixed-size
+// array. Three.js uploads all 16 slots and calls .toArray() on each element, so
+// the uniform value must ALWAYS contain exactly 16 Colors. A shorter palette
+// (e.g. autoTheme returns ≤8 colors) leaves trailing slots undefined and crashes
+// render() with "Cannot read properties of undefined (reading 'toArray')". The
+// shader only reads the first uPaletteSize entries, so padding the rest is safe.
+const PALETTE_UNIFORM_SIZE = 16;
+
+const toPaletteUniform = (palette: string[]): THREE.Color[] =>
+  Array.from(
+    { length: PALETTE_UNIFORM_SIZE },
+    (_, i) => new THREE.Color(palette[i] ?? palette[palette.length - 1] ?? '#000000')
+  );
+
+// The generator shader declares `uniform vec3 uColors[8]`. We upload the stops as
+// a flat Float32Array(24) so Three uses gl.uniform3fv directly (no per-element
+// .toArray(), avoiding the same crash class as uPaletteColors). Colours are RAW
+// sRGB (hex/255), NOT THREE.Color, so the generated gradient behaves exactly like
+// dithering a real gradient image.
+const GEN_COLOR_SLOTS = 8;
+
+const hexToRgb01 = (hex: string): [number, number, number] => {
+  const h = (hex || '').replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(full, 16);
+  if (full.length !== 6 || Number.isNaN(n)) return [0, 0, 0];
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+};
+
+const buildGenColorsUniform = (colors: string[]): Float32Array => {
+  const arr = new Float32Array(GEN_COLOR_SLOTS * 3);
+  for (let i = 0; i < GEN_COLOR_SLOTS; i++) {
+    const src = colors[i] ?? colors[colors.length - 1] ?? '#000000';
+    const [r, g, b] = hexToRgb01(src);
+    arr[i * 3] = r;
+    arr[i * 3 + 1] = g;
+    arr[i * 3 + 2] = b;
+  }
+  return arr;
+};
+
+const genColorCount = (colors: string[]): number =>
+  Math.min(Math.max(colors.length, 2), GEN_COLOR_SLOTS);
 
 export default function WebGLCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -18,6 +64,18 @@ export default function WebGLCanvas() {
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const renderTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
   const customShapeTexRef = useRef<THREE.Texture | null>(null);
+  // Generative source (render-to-texture pre-pass)
+  const generatorSceneRef = useRef<THREE.Scene | null>(null);
+  const generatorMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
+  const generatorMeshRef = useRef<THREE.Mesh | null>(null);
+  const generatorTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
+  const generatorDirtyRef = useRef(true);
+  // Text / logo overlay (composited into the same canvas so it exports)
+  const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const overlayTextureRef = useRef<THREE.CanvasTexture | null>(null);
+  const overlayMeshRef = useRef<THREE.Mesh | null>(null);
+  const overlayLogoImgRef = useRef<HTMLImageElement | null>(null);
+  const exportPrevSizeRef = useRef<{ w: number; h: number } | null>(null);
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
   const animationFrameRef = useRef<number | null>(null);
@@ -67,6 +125,9 @@ export default function WebGLCanvas() {
       scene.clear();
       renderer.dispose();
       renderTarget.dispose();
+      generatorTargetRef.current?.dispose();
+      generatorMaterialRef.current?.dispose();
+      generatorMeshRef.current?.geometry.dispose();
     };
   }, []);
 
@@ -125,6 +186,8 @@ export default function WebGLCanvas() {
         uTemporalWeight: { value: state.temporalWeight },
         uContrast: { value: state.contrast },
         uBrightness: { value: state.brightness },
+        uSaturation: { value: state.saturation },
+        uHueShift: { value: state.hueShift },
         uColors: { value: state.colors },
         uInvert: { value: state.invert },
         uGrayscale: { value: state.grayscale },
@@ -147,8 +210,8 @@ export default function WebGLCanvas() {
         uTritoneShadow: { value: new THREE.Color(state.tritoneShadow) },
         uTritoneMid: { value: new THREE.Color(state.tritoneMid) },
         uTritoneHighlight: { value: new THREE.Color(state.tritoneHighlight) },
-        uPaletteColors: { value: state.customPalette.map((c) => new THREE.Color(c)) },
-        uPaletteSize: { value: 16 },
+        uPaletteColors: { value: toPaletteUniform(state.customPalette) },
+        uPaletteSize: { value: Math.min(state.customPalette.length, PALETTE_UNIFORM_SIZE) },
         uSerpentine: { value: state.serpentine },
         uGammaCorrect: { value: state.gammaCorrect },
         uDitherStrength: { value: state.ditherStrength },
@@ -197,14 +260,63 @@ export default function WebGLCanvas() {
         uVhsEffect: { value: state.vhsEffect },
         uEdgeGlow: { value: state.edgeGlow },
         uEmboss: { value: state.emboss },
+        uSharpen: { value: state.sharpen },
+        uPosterize: { value: state.posterize },
+        uGlitchIntensity: { value: state.glitchIntensity },
+        uGlitchSpeed: { value: state.glitchSpeed },
 
         // Comparison
         uComparison: { value: state.comparisonMode },
         uComparisonPos: { value: state.comparisonPosition },
+        uGridMode: { value: state.gridMode },
+        uGridAlgorithms: { value: state.gridAlgorithms },
       },
     });
 
     materialRef.current = material;
+    return material;
+  }, []);
+
+  // Create the generator material (renders the abstract pattern into a target)
+  const createGeneratorMaterial = useCallback(() => {
+    if (generatorMaterialRef.current) {
+      generatorMaterialRef.current.dispose();
+    }
+    const s = useDitherStore.getState();
+    const material = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader: generatorShader,
+      uniforms: {
+        uTime: { value: 0 },
+        uResolution: { value: new THREE.Vector2(s.outputWidth, s.outputHeight) },
+        uSeed: { value: s.generativeSeed },
+        uPattern: { value: s.generativePattern },
+        uColors: { value: buildGenColorsUniform(s.generativeColors) },
+        uColorCount: { value: genColorCount(s.generativeColors) },
+        uAngle: { value: s.generativeAngle },
+        uScale: { value: s.generativeScale },
+        uWarp: { value: s.generativeWarp },
+        uWarpFreq: { value: s.generativeWarpFreq },
+        uGrain: { value: s.generativeGrain },
+        uContrast: { value: s.generativeContrast },
+        uBlend: { value: s.generativeBlend },
+        uMotion: { value: s.generativeMotion },
+        uSpeed: { value: s.generativeSpeed },
+        uAnimate: { value: s.generativeAnimate ? 1 : 0 },
+        uGridCols: { value: s.generativeGridCols },
+        uGridRows: { value: s.generativeGridRows },
+        uSteps: { value: s.generativeSteps },
+        uBPM: { value: s.generativeBPM },
+        uMirror: { value: s.generativeMirror },
+        uKaleido: { value: s.generativeKaleido },
+        uTileX: { value: s.generativeTileX },
+        uTileY: { value: s.generativeTileY },
+        uGenVignette: { value: s.generativeVignette },
+        uBorder: { value: s.generativeBorder },
+        uBorderColor: { value: new THREE.Vector3(...hexToRgb01(s.generativeBorderColor)) },
+      },
+    });
+    generatorMaterialRef.current = material;
     return material;
   }, []);
 
@@ -214,12 +326,37 @@ export default function WebGLCanvas() {
       return;
     }
 
+    // While the exporter is driving deterministic frames, pause our own rendering
+    // (keep the RAF alive so we resume cleanly once capture finishes).
+    if (generatorExport.capturing) {
+      animationFrameRef.current = requestAnimationFrame(animate);
+      return;
+    }
+
     // Update time uniform
     materialRef.current.uniforms.uTime.value = performance.now() * 0.001;
 
     // Update video texture
     if (videoTextureRef.current && videoElementRef.current) {
       videoTextureRef.current.needsUpdate = true;
+    }
+
+    // Generative pre-pass: render the abstract pattern into the target, which the
+    // main material samples as tDiffuse. Skipped when paused and nothing changed.
+    const genState = useDitherStore.getState();
+    if (
+      genState.isGenerative &&
+      generatorSceneRef.current &&
+      generatorMaterialRef.current &&
+      generatorTargetRef.current &&
+      (genState.generativeAnimate || generatorDirtyRef.current)
+    ) {
+      generatorMaterialRef.current.uniforms.uTime.value = performance.now() * 0.001;
+      generatorMaterialRef.current.uniforms.uAnimate.value = genState.generativeAnimate ? 1 : 0;
+      rendererRef.current.setRenderTarget(generatorTargetRef.current);
+      rendererRef.current.render(generatorSceneRef.current, cameraRef.current);
+      rendererRef.current.setRenderTarget(null);
+      generatorDirtyRef.current = false;
     }
 
     // Render scene
@@ -238,12 +375,80 @@ export default function WebGLCanvas() {
     animationFrameRef.current = requestAnimationFrame(animate);
   }, []);
 
+  // Render ONE deterministic frame with time forced to `uTimeSeconds`. Used by the
+  // exporter to produce seamless loops (frame i at phase 2π·i/N) at any FPS.
+  const renderExportFrame = useCallback((uTimeSeconds: number) => {
+    const renderer = rendererRef.current;
+    const scene = sceneRef.current;
+    const cam = cameraRef.current;
+    if (!renderer || !scene || !cam) return;
+
+    const genMat = generatorMaterialRef.current;
+    if (genMat && generatorSceneRef.current && generatorTargetRef.current) {
+      genMat.uniforms.uTime.value = uTimeSeconds;
+      genMat.uniforms.uAnimate.value = 1;
+      renderer.setRenderTarget(generatorTargetRef.current);
+      renderer.render(generatorSceneRef.current, cam);
+      renderer.setRenderTarget(null);
+    }
+    if (materialRef.current) materialRef.current.uniforms.uTime.value = uTimeSeconds;
+    renderer.render(scene, cam);
+  }, []);
+
   const startAnimation = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
     animate();
   }, [animate]);
+
+  // Initialize / resize the generative source (no uploaded file required)
+  const initGenerative = useCallback(() => {
+    if (!sceneRef.current || !cameraRef.current || !rendererRef.current) return;
+
+    const s = useDitherStore.getState();
+    const w = s.outputWidth;
+    const h = s.outputHeight;
+
+    // Size renderer + render target to the chosen output resolution
+    rendererRef.current.setSize(w, h);
+    if (!generatorTargetRef.current) {
+      generatorTargetRef.current = new THREE.WebGLRenderTarget(w, h, {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+      });
+    } else {
+      generatorTargetRef.current.setSize(w, h);
+    }
+
+    // Generator scene = fullscreen quad with the generator material
+    const genMaterial = createGeneratorMaterial();
+    genMaterial.uniforms.uResolution.value = new THREE.Vector2(w, h);
+    if (!generatorSceneRef.current) {
+      generatorSceneRef.current = new THREE.Scene();
+      const genMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), genMaterial);
+      generatorMeshRef.current = genMesh;
+      generatorSceneRef.current.add(genMesh);
+    } else if (generatorMeshRef.current) {
+      generatorMeshRef.current.material = genMaterial;
+    }
+
+    // Main material samples the generator target as tDiffuse
+    const mainMaterial = createMaterial(generatorTargetRef.current.texture, w, h);
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    if (meshRef.current) {
+      sceneRef.current.remove(meshRef.current);
+      meshRef.current.geometry.dispose();
+    }
+    const mesh = new THREE.Mesh(geometry, mainMaterial);
+    meshRef.current = mesh;
+    sceneRef.current.add(mesh);
+
+    setResolution({ width: w, height: h });
+    setHasImage(true);
+    generatorDirtyRef.current = true;
+    startAnimation();
+  }, [createGeneratorMaterial, createMaterial, startAnimation]);
 
   // Load image file
   const loadImage = useCallback((file: File) => {
@@ -277,6 +482,16 @@ export default function WebGLCanvas() {
 
         setHasImage(true);
         startAnimation();
+
+        // Run autoTheme when a new image is loaded
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = img.width;
+        tempCanvas.height = img.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (tempCtx) {
+          tempCtx.drawImage(img, 0, 0);
+          useDitherStore.getState().autoTheme(tempCanvas);
+        }
       };
       img.src = e.target?.result as string;
     };
@@ -474,6 +689,215 @@ export default function WebGLCanvas() {
     }
   }, [currentFile, isVideo, loadImage, loadVideo]);
 
+  // Enable / resize / tear down the generative source
+  useEffect(() => {
+    if (ditherState.isGenerative) {
+      initGenerative();
+    } else if (!useDitherStore.getState().currentFile) {
+      // Left generative mode with no file loaded → stop the loop, show the prompt
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      setHasImage(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ditherState.isGenerative, ditherState.outputWidth, ditherState.outputHeight, initGenerative]);
+
+  // Live-update generator uniforms as generative settings change (independent of
+  // the dither palette, which is driven by the main uniform-update effect below)
+  useEffect(() => {
+    const mat = generatorMaterialRef.current;
+    if (!mat || !ditherState.isGenerative) return;
+    mat.uniforms.uSeed.value = ditherState.generativeSeed;
+    mat.uniforms.uPattern.value = ditherState.generativePattern;
+    mat.uniforms.uColors.value = buildGenColorsUniform(ditherState.generativeColors);
+    mat.uniforms.uColorCount.value = genColorCount(ditherState.generativeColors);
+    mat.uniforms.uAngle.value = ditherState.generativeAngle;
+    mat.uniforms.uScale.value = ditherState.generativeScale;
+    mat.uniforms.uWarp.value = ditherState.generativeWarp;
+    mat.uniforms.uWarpFreq.value = ditherState.generativeWarpFreq;
+    mat.uniforms.uGrain.value = ditherState.generativeGrain;
+    mat.uniforms.uContrast.value = ditherState.generativeContrast;
+    mat.uniforms.uBlend.value = ditherState.generativeBlend;
+    mat.uniforms.uMotion.value = ditherState.generativeMotion;
+    mat.uniforms.uSpeed.value = ditherState.generativeSpeed;
+    mat.uniforms.uAnimate.value = ditherState.generativeAnimate ? 1 : 0;
+    mat.uniforms.uGridCols.value = ditherState.generativeGridCols;
+    mat.uniforms.uGridRows.value = ditherState.generativeGridRows;
+    mat.uniforms.uSteps.value = ditherState.generativeSteps;
+    mat.uniforms.uBPM.value = ditherState.generativeBPM;
+    mat.uniforms.uMirror.value = ditherState.generativeMirror;
+    mat.uniforms.uKaleido.value = ditherState.generativeKaleido;
+    mat.uniforms.uTileX.value = ditherState.generativeTileX;
+    mat.uniforms.uTileY.value = ditherState.generativeTileY;
+    mat.uniforms.uGenVignette.value = ditherState.generativeVignette;
+    mat.uniforms.uBorder.value = ditherState.generativeBorder;
+    mat.uniforms.uBorderColor.value = new THREE.Vector3(...hexToRgb01(ditherState.generativeBorderColor));
+    generatorDirtyRef.current = true; // re-render even while paused
+  }, [
+    ditherState.isGenerative,
+    ditherState.generativePattern,
+    ditherState.generativeColors,
+    ditherState.generativeAngle,
+    ditherState.generativeScale,
+    ditherState.generativeWarp,
+    ditherState.generativeWarpFreq,
+    ditherState.generativeGrain,
+    ditherState.generativeContrast,
+    ditherState.generativeBlend,
+    ditherState.generativeMotion,
+    ditherState.generativeSpeed,
+    ditherState.generativeSeed,
+    ditherState.generativeAnimate,
+    ditherState.generativeGridCols,
+    ditherState.generativeGridRows,
+    ditherState.generativeSteps,
+    ditherState.generativeBPM,
+    ditherState.generativeMirror,
+    ditherState.generativeKaleido,
+    ditherState.generativeTileX,
+    ditherState.generativeTileY,
+    ditherState.generativeVignette,
+    ditherState.generativeBorder,
+    ditherState.generativeBorderColor,
+  ]);
+
+  // ---- Text / logo overlay (drawn on a 2D canvas -> CanvasTexture -> quad on top
+  //      of the main scene, so it is captured by every export path) ----
+  const drawOverlay = useCallback(() => {
+    if (!overlayCanvasRef.current) overlayCanvasRef.current = document.createElement('canvas');
+    const cnv = overlayCanvasRef.current;
+    const renderer = rendererRef.current;
+    const w = renderer ? renderer.domElement.width : 1920;
+    const h = renderer ? renderer.domElement.height : 1080;
+    if (cnv.width !== w || cnv.height !== h) { cnv.width = w; cnv.height = h; }
+    const ctx = cnv.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, w, h);
+
+    const s = useDitherStore.getState();
+    if (s.overlayEnabled) {
+      const cx = s.overlayX * w;
+      let cy = s.overlayY * h;
+      const img = overlayLogoImgRef.current;
+      const textH = s.overlayText ? (s.overlaySize / 100) * h * 1.3 : 0;
+      if (img && s.overlayLogo) {
+        const lh = s.overlayLogoScale * h;
+        const lw = lh * (img.width / Math.max(img.height, 1));
+        const top = cy - (lh + textH) / 2;
+        ctx.drawImage(img, cx - lw / 2, top, lw, lh);
+        cy = top + lh + textH / 2;
+      }
+      if (s.overlayText) {
+        const fs = (s.overlaySize / 100) * h;
+        ctx.fillStyle = s.overlayTextColor;
+        ctx.font = '600 ' + fs + 'px Georgia, "Times New Roman", serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const lines = s.overlayText.split('\n');
+        lines.forEach((line, i) => {
+          ctx.fillText(line, cx, cy + (i - (lines.length - 1) / 2) * fs * 1.2);
+        });
+      }
+    }
+    if (overlayTextureRef.current) overlayTextureRef.current.needsUpdate = true;
+  }, []);
+
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    if (!overlayCanvasRef.current) overlayCanvasRef.current = document.createElement('canvas');
+    if (!overlayTextureRef.current) {
+      const tex = new THREE.CanvasTexture(overlayCanvasRef.current);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      overlayTextureRef.current = tex;
+    }
+    if (!overlayMeshRef.current) {
+      const mat = new THREE.MeshBasicMaterial({
+        map: overlayTextureRef.current, transparent: true, depthTest: false, depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
+      mesh.renderOrder = 10;
+      overlayMeshRef.current = mesh;
+      sceneRef.current.add(mesh);
+    }
+    overlayMeshRef.current.visible = ditherState.overlayEnabled;
+
+    if (ditherState.overlayLogo) {
+      if (!overlayLogoImgRef.current || overlayLogoImgRef.current.src !== ditherState.overlayLogo) {
+        const img = new Image();
+        img.onload = () => { overlayLogoImgRef.current = img; drawOverlay(); };
+        img.src = ditherState.overlayLogo;
+      } else {
+        drawOverlay();
+      }
+    } else {
+      overlayLogoImgRef.current = null;
+      drawOverlay();
+    }
+  }, [
+    ditherState.overlayEnabled, ditherState.overlayText, ditherState.overlayTextColor,
+    ditherState.overlaySize, ditherState.overlayX, ditherState.overlayY,
+    ditherState.overlayLogo, ditherState.overlayLogoScale,
+    resolution.width, resolution.height, drawOverlay,
+  ]);
+
+  // ---- High-resolution export: temporarily resize the renderer above the preview
+  //      size so stills/video are exported at >= 4K without lagging the editor. ----
+  const beginExport = useCallback((w: number, h: number) => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    exportPrevSizeRef.current = { w: renderer.domElement.width, h: renderer.domElement.height };
+    generatorExport.capturing = true;
+    renderer.setSize(w, h, false); // keep CSS size; only the drawing buffer goes hi-res
+    generatorTargetRef.current?.setSize(w, h);
+    generatorMaterialRef.current?.uniforms.uResolution.value.set(w, h);
+    materialRef.current?.uniforms.uResolution.value.set(w, h);
+    drawOverlay(); // re-rasterise text/logo crisply at the export resolution
+  }, [drawOverlay]);
+
+  const endExport = useCallback(() => {
+    const renderer = rendererRef.current;
+    const prev = exportPrevSizeRef.current;
+    generatorExport.capturing = false;
+    if (!renderer || !prev) return;
+    renderer.setSize(prev.w, prev.h, false);
+    generatorTargetRef.current?.setSize(prev.w, prev.h);
+    generatorMaterialRef.current?.uniforms.uResolution.value.set(prev.w, prev.h);
+    materialRef.current?.uniforms.uResolution.value.set(prev.w, prev.h);
+    drawOverlay();
+    generatorDirtyRef.current = true;
+  }, [drawOverlay]);
+
+  // Render one frame at the CURRENT (live) time — for still-image export.
+  const renderStillFrame = useCallback(() => {
+    const renderer = rendererRef.current;
+    const scene = sceneRef.current;
+    const cam = cameraRef.current;
+    if (!renderer || !scene || !cam) return;
+    const s = useDitherStore.getState();
+    const genMat = generatorMaterialRef.current;
+    if (genMat && generatorSceneRef.current && generatorTargetRef.current) {
+      genMat.uniforms.uTime.value = performance.now() * 0.001;
+      genMat.uniforms.uAnimate.value = s.generativeAnimate ? 1 : 0;
+      renderer.setRenderTarget(generatorTargetRef.current);
+      renderer.render(generatorSceneRef.current, cam);
+      renderer.setRenderTarget(null);
+    }
+    if (materialRef.current) materialRef.current.uniforms.uTime.value = performance.now() * 0.001;
+    renderer.render(scene, cam);
+  }, []);
+
+  useEffect(() => {
+    generatorExport.renderExportFrame = renderExportFrame;
+    generatorExport.renderStillFrame = renderStillFrame;
+    generatorExport.beginExport = beginExport;
+    generatorExport.endExport = endExport;
+    return () => {
+      generatorExport.renderExportFrame = null;
+      generatorExport.renderStillFrame = null;
+      generatorExport.beginExport = null;
+      generatorExport.endExport = null;
+    };
+  }, [renderExportFrame, renderStillFrame, beginExport, endExport]);
+
   // Update uniforms when state changes
   useEffect(() => {
     if (!materialRef.current) return;
@@ -487,6 +911,8 @@ export default function WebGLCanvas() {
     material.uniforms.uThreshold.value = ditherState.threshold;
     material.uniforms.uContrast.value = ditherState.contrast;
     material.uniforms.uBrightness.value = ditherState.brightness;
+    material.uniforms.uSaturation.value = ditherState.saturation;
+    material.uniforms.uHueShift.value = ditherState.hueShift;
     material.uniforms.uColors.value = ditherState.colors;
     material.uniforms.uInvert.value = ditherState.invert;
     material.uniforms.uGrayscale.value = ditherState.grayscale;
@@ -507,7 +933,8 @@ export default function WebGLCanvas() {
     material.uniforms.uTritoneShadow.value = new THREE.Color(ditherState.tritoneShadow);
     material.uniforms.uTritoneMid.value = new THREE.Color(ditherState.tritoneMid);
     material.uniforms.uTritoneHighlight.value = new THREE.Color(ditherState.tritoneHighlight);
-    material.uniforms.uPaletteColors.value = ditherState.customPalette.map((c) => new THREE.Color(c));
+    material.uniforms.uPaletteColors.value = toPaletteUniform(ditherState.customPalette);
+    material.uniforms.uPaletteSize.value = Math.min(ditherState.customPalette.length, PALETTE_UNIFORM_SIZE);
     material.uniforms.uSerpentine.value = ditherState.serpentine;
     material.uniforms.uGammaCorrect.value = ditherState.gammaCorrect;
     material.uniforms.uDitherStrength.value = ditherState.ditherStrength;
@@ -533,6 +960,10 @@ export default function WebGLCanvas() {
     if (material.uniforms.uVhsEffect) material.uniforms.uVhsEffect.value = ditherState.vhsEffect;
     if (material.uniforms.uEdgeGlow) material.uniforms.uEdgeGlow.value = ditherState.edgeGlow;
     if (material.uniforms.uEmboss) material.uniforms.uEmboss.value = ditherState.emboss;
+    if (material.uniforms.uSharpen) material.uniforms.uSharpen.value = ditherState.sharpen;
+    if (material.uniforms.uPosterize) material.uniforms.uPosterize.value = ditherState.posterize;
+    if (material.uniforms.uGlitchIntensity) material.uniforms.uGlitchIntensity.value = ditherState.glitchIntensity;
+    if (material.uniforms.uGlitchSpeed) material.uniforms.uGlitchSpeed.value = ditherState.glitchSpeed;
 
     // Video/Animation
     material.uniforms.uFrameBlending.value = ditherState.frameBlending;
@@ -556,6 +987,8 @@ export default function WebGLCanvas() {
     // Comparison
     if (material.uniforms.uComparison) material.uniforms.uComparison.value = ditherState.comparisonMode;
     if (material.uniforms.uComparisonPos) material.uniforms.uComparisonPos.value = ditherState.comparisonPosition;
+    if (material.uniforms.uGridMode) material.uniforms.uGridMode.value = ditherState.gridMode;
+    if (material.uniforms.uGridAlgorithms) material.uniforms.uGridAlgorithms.value = ditherState.gridAlgorithms;
 
   }, [ditherState]);
 
