@@ -50,6 +50,16 @@ export interface DitherState {
   overlayLogo: string | null; // data URL
   overlayLogoScale: number; // fraction of canvas height
 
+  // Image layer — composite an uploaded image WITH the generator pattern
+  // (mask / blend) before the whole thing is dithered.
+  generativeImageSrc: string | null; // data URL of the layer image
+  generativeImageW: number;          // natural px width  (for cover/contain fit)
+  generativeImageH: number;          // natural px height
+  imageLayerMode: number;            // 0 off,1 alpha-over,2 luma-stencil,3 multiply,4 screen,5 overlay,6 add,7 crossfade
+  imageLayerAmount: number;          // 0..1 strength / opacity
+  imageLayerInvert: boolean;         // flip mask / alpha
+  imageLayerFit: number;             // 0 cover, 1 contain, 2 stretch
+
   // Algorithm state
   currentAlgorithm: number;
   multiAlgoEnabled: boolean;
@@ -156,6 +166,19 @@ export interface DitherState {
   asciiFgColor: string;
   asciiUseColor: boolean; // true = use source color for FG
   asciiInvert: boolean;
+  asciiCharacters: string; // glyph ramp for the Characters shape (first char = darkest)
+
+  // Effect animation (animates the dither / ASCII on any source)
+  fxAnimate: boolean;
+  fxSpeed: number;
+  fxMotion: number; // 1 drift, 2 zoom, 3 wobble, 4 shimmer
+
+  // Analog signal effects (composite / VHS / CRT artifacts)
+  analogWobble: number;
+  analogBleed: number;
+  analogStatic: number;
+  analogHum: number;
+  analogGhost: number;
   customShapeTexture: string | null; // Data URL for custom SVG/Image
 
   // Geometric Halftones (Efecto-style)
@@ -193,6 +216,7 @@ export interface DitherState {
   setGenerativeSetting: (key: string, value: number | boolean | string) => void;
   setGenerativeColors: (colors: string[]) => void;
   setGenerativeColor: (index: number, color: string) => void;
+  setGenerativeImage: (src: string | null, width?: number, height?: number) => void;
   setOutputSize: (width: number, height: number, aspect?: string) => void;
   randomizeGenerative: () => void;
 }
@@ -243,6 +267,15 @@ const defaultState = {
   overlayY: 0.5,
   overlayLogo: null,
   overlayLogoScale: 0.16,
+
+  // Image layer
+  generativeImageSrc: null,
+  generativeImageW: 0,
+  generativeImageH: 0,
+  imageLayerMode: 1, // alpha-over (best for transparent logos; falls back to crossfade for JPGs)
+  imageLayerAmount: 1,
+  imageLayerInvert: false,
+  imageLayerFit: 0, // cover
 
   // Algorithm state
   currentAlgorithm: 1, // Floyd-Steinberg default
@@ -350,6 +383,15 @@ const defaultState = {
   asciiFgColor: '#ffffff',
   asciiUseColor: true,
   asciiInvert: false,
+  asciiCharacters: '@%#*+=-:. ',
+  fxAnimate: false,
+  fxSpeed: 0.5,
+  fxMotion: 1,
+  analogWobble: 0,
+  analogBleed: 0,
+  analogStatic: 0,
+  analogHum: 0,
+  analogGhost: 0,
   customShapeTexture: null,
 
   // Geometric Halftones
@@ -431,6 +473,14 @@ export const useDitherStore = create<DitherState>((set) => ({
     overlayY: state.overlayY,
     overlayLogo: state.overlayLogo,
     overlayLogoScale: state.overlayLogoScale,
+    // Image layer is part of the generated composition — keep it through RESET ALL.
+    generativeImageSrc: state.generativeImageSrc,
+    generativeImageW: state.generativeImageW,
+    generativeImageH: state.generativeImageH,
+    imageLayerMode: state.imageLayerMode,
+    imageLayerAmount: state.imageLayerAmount,
+    imageLayerInvert: state.imageLayerInvert,
+    imageLayerFit: state.imageLayerFit,
   })),
 
   setFps: (fps) => set({ fps }),
@@ -462,6 +512,9 @@ export const useDitherStore = create<DitherState>((set) => ({
       next[index] = color;
       return { generativeColors: next };
     }),
+
+  setGenerativeImage: (src, width = 0, height = 0) =>
+    set({ generativeImageSrc: src, generativeImageW: width, generativeImageH: height }),
 
   setOutputSize: (width, height, aspect) =>
     set({

@@ -20,6 +20,13 @@ const PATTERNS = [
   { value: 12, label: 'Truchet Tiles' },
   { value: 13, label: 'Voronoi Shards' },
   { value: 14, label: 'Spiral' },
+  { value: 15, label: 'Grid / Graph Paper' },
+  { value: 16, label: 'Isometric Grid' },
+  { value: 17, label: 'Hex Grid' },
+  { value: 18, label: 'Concentric Polygons' },
+  { value: 19, label: 'Circuit Board' },
+  { value: 20, label: 'Perspective Grid' },
+  { value: 21, label: 'Crosshatch' },
 ];
 
 const MOTIONS = [
@@ -208,6 +215,92 @@ const GEN_PRESETS: { name: string; apply: () => void }[] = [
       s.setGlobalSetting('scale', 2);
     },
   },
+  {
+    name: 'Blueprint',
+    apply: () => {
+      const s = useDitherStore.getState();
+      s.setGenerativeColors(['#0b2a6b', '#bcd4ff']); // bg -> line
+      s.setGenerativeSetting('generativePattern', 15); // grid
+      s.setGenerativeSetting('generativeScale', 1.2);
+      s.setGenerativeSetting('generativeWarp', 0);
+      s.setGenerativeSetting('generativeContrast', 1.0);
+      s.setGenerativeSetting('generativeMirror', 0);
+      s.setGenerativeSetting('generativeGridCols', 0);
+      s.setGenerativeSetting('generativeGridRows', 0);
+      s.setGenerativeSetting('generativeSteps', 0);
+      s.setGenerativeSetting('generativeAnimate', false);
+      s.setColorMode(0);
+      s.setGlobalSetting('colors', 16);
+      s.setAlgorithm(1);
+      s.setGlobalSetting('ditherStrength', 0.15);
+      s.setGlobalSetting('scale', 1);
+    },
+  },
+  {
+    name: 'Wireframe',
+    apply: () => {
+      const s = useDitherStore.getState();
+      s.setGenerativeColors(['#05060a', '#39ff9a']); // black -> neon green
+      s.setGenerativeSetting('generativePattern', 20); // perspective grid
+      s.setGenerativeSetting('generativeScale', 1.0);
+      s.setGenerativeSetting('generativeWarp', 0);
+      s.setGenerativeSetting('generativeContrast', 1.0);
+      s.setGenerativeSetting('generativeMirror', 0);
+      s.setGenerativeSetting('generativeGridCols', 0);
+      s.setGenerativeSetting('generativeGridRows', 0);
+      s.setGenerativeSetting('generativeSteps', 0);
+      s.setGenerativeSetting('generativeAnimate', true);
+      s.setGenerativeSetting('generativeMotion', 5); // zoom
+      s.setGenerativeSetting('generativeSpeed', 0.4);
+      s.setColorMode(0);
+      s.setGlobalSetting('colors', 16);
+      s.setAlgorithm(1);
+      s.setGlobalSetting('ditherStrength', 0.1);
+      s.setGlobalSetting('scale', 1);
+    },
+  },
+  {
+    name: 'Circuit',
+    apply: () => {
+      const s = useDitherStore.getState();
+      s.setGenerativeColors(['#03130b', '#37e0a0']);
+      s.setGenerativeSetting('generativePattern', 19); // circuit traces
+      s.setGenerativeSetting('generativeScale', 1.3);
+      s.setGenerativeSetting('generativeWarp', 0);
+      s.setGenerativeSetting('generativeContrast', 1.0);
+      s.setGenerativeSetting('generativeMirror', 0);
+      s.setGenerativeSetting('generativeGridCols', 0);
+      s.setGenerativeSetting('generativeGridRows', 0);
+      s.setGenerativeSetting('generativeSteps', 0);
+      s.setGenerativeSetting('generativeAnimate', false);
+      s.setColorMode(0);
+      s.setGlobalSetting('colors', 16);
+      s.setAlgorithm(1);
+      s.setGlobalSetting('ditherStrength', 0.12);
+      s.setGlobalSetting('scale', 1);
+    },
+  },
+  {
+    name: 'Isometric',
+    apply: () => {
+      const s = useDitherStore.getState();
+      s.setGenerativeColors(['#12101c', '#f5c451']);
+      s.setGenerativeSetting('generativePattern', 16); // isometric grid
+      s.setGenerativeSetting('generativeScale', 1.0);
+      s.setGenerativeSetting('generativeWarp', 0);
+      s.setGenerativeSetting('generativeContrast', 1.0);
+      s.setGenerativeSetting('generativeMirror', 0);
+      s.setGenerativeSetting('generativeGridCols', 0);
+      s.setGenerativeSetting('generativeGridRows', 0);
+      s.setGenerativeSetting('generativeSteps', 0);
+      s.setGenerativeSetting('generativeAnimate', false);
+      s.setColorMode(0);
+      s.setGlobalSetting('colors', 16);
+      s.setAlgorithm(1);
+      s.setGlobalSetting('ditherStrength', 0.12);
+      s.setGlobalSetting('scale', 1);
+    },
+  },
 ];
 
 const sliderClass =
@@ -258,14 +351,16 @@ export default function GenerativePanel() {
     generativeTileY, generativeVignette, generativeBorder, generativeBorderColor,
     overlayEnabled, overlayText, overlayTextColor, overlaySize, overlayX, overlayY,
     overlayLogo, overlayLogoScale,
+    generativeImageSrc, imageLayerMode, imageLayerAmount, imageLayerInvert, imageLayerFit,
     outputAspect, outputWidth, outputHeight,
-    setGenerativeSetting, setGenerativeColors, setGenerativeColor, setOutputSize, randomizeGenerative,
+    setGenerativeSetting, setGenerativeColors, setGenerativeColor, setGenerativeImage, setOutputSize, randomizeGenerative,
   } = useDitherStore();
 
   const [userPresets, setUserPresets] = useState<GenPreset[]>([]);
   const [presetName, setPresetName] = useState('');
   const logoInputRef = useRef<HTMLInputElement>(null);
   const extractInputRef = useRef<HTMLInputElement>(null);
+  const imageLayerInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
@@ -335,6 +430,20 @@ export default function GenerativePanel() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => setGenerativeSetting('overlayLogo', reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleImageLayerFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const img = new Image();
+      img.onload = () => setGenerativeImage(dataUrl, img.naturalWidth, img.naturalHeight);
+      img.src = dataUrl;
+    };
     reader.readAsDataURL(file);
   };
 
@@ -499,6 +608,65 @@ export default function GenerativePanel() {
             className="w-full p-2 mt-2 text-[10px] bg-transparent border border-[#d0cdc4] text-[#666] hover:border-[#2a2a2a] hover:text-[#2a2a2a]">
             + ADD STOP
           </button>
+        )}
+      </div>
+
+      {/* IMAGE LAYER */}
+      <div className={sectionClass}>
+        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">IMAGE LAYER</h2>
+        <div className="flex gap-2 mb-3">
+          <button onClick={() => imageLayerInputRef.current?.click()}
+            className="flex-1 p-2 text-[10px] bg-transparent border border-[#d0cdc4] text-[#666] hover:border-[#2a2a2a] hover:text-[#2a2a2a]">
+            {generativeImageSrc ? 'REPLACE IMAGE' : '⤓ ADD IMAGE'}
+          </button>
+          {generativeImageSrc && (
+            <button onClick={() => setGenerativeImage(null)}
+              className="px-3 text-[10px] bg-transparent border border-[#d0cdc4] text-[#999] hover:text-[#e74c3c] hover:border-[#e74c3c]">CLEAR</button>
+          )}
+        </div>
+        <input ref={imageLayerInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageLayerFile} />
+        {generativeImageSrc ? (
+          <div className="space-y-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={generativeImageSrc} alt="layer preview"
+              className="w-full max-h-28 object-contain bg-[#d8d4ca] border border-[#d0cdc4]" />
+            <div>
+              <label className="text-xs text-[#666] block mb-2">Blend mode</label>
+              <select value={imageLayerMode}
+                onChange={(e) => setGenerativeSetting('imageLayerMode', Number(e.target.value))}
+                className={selectClass}>
+                <option value={0}>Off</option>
+                <option value={1}>Image over (alpha)</option>
+                <option value={2}>Stencil — pattern fills image</option>
+                <option value={3}>Multiply</option>
+                <option value={4}>Screen</option>
+                <option value={5}>Overlay</option>
+                <option value={6}>Add</option>
+                <option value={7}>Crossfade</option>
+              </select>
+            </div>
+            <Slider label="Amount" value={imageLayerAmount} min={0} max={1} step={0.01}
+              onChange={(v) => setGenerativeSetting('imageLayerAmount', v)} fmt={(v) => `${Math.round(v * 100)}%`} />
+            <div>
+              <label className="text-xs text-[#666] block mb-2">Fit</label>
+              <select value={imageLayerFit}
+                onChange={(e) => setGenerativeSetting('imageLayerFit', Number(e.target.value))}
+                className={selectClass}>
+                <option value={0}>Cover</option>
+                <option value={1}>Contain</option>
+                <option value={2}>Stretch</option>
+              </select>
+            </div>
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-xs text-[#666]">Invert mask / alpha</span>
+              <input type="checkbox" checked={imageLayerInvert}
+                onChange={(e) => setGenerativeSetting('imageLayerInvert', e.target.checked)}
+                className="w-4 h-4 cursor-pointer accent-[#2a2a2a]" />
+            </label>
+            <p className="text-[10px] text-[#999]">Composited into the pattern, then dithered together. <b>Alpha</b> = transparent-PNG logo over the pattern. <b>Stencil</b> = pattern shows through the image (use Invert to swap light/dark). Animate &amp; export work as usual.</p>
+          </div>
+        ) : (
+          <p className="text-[10px] text-[#999]">Drop in a photo or transparent PNG to mask / blend it with the generator pattern — the whole composite then gets dithered.</p>
         )}
       </div>
 

@@ -16,12 +16,15 @@
     "productName": "Dither Studio",
     "mac": {
       "category": "public.app-category.graphics-design",
-      "target": "dmg"
+      "target": "dmg",
+      "identity": null,
+      "extendInfo": {
+        "NSCameraUsageDescription": "Dither Studio uses the camera for the live webcam dithering source."
+      }
     },
     "files": [
       "electron/**/*",
-      ".next/**/*",
-      "public/**/*",
+      "out/**/*",
       "package.json"
     ],
     "directories": {

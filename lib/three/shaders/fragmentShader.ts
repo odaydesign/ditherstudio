@@ -6,6 +6,7 @@ export const fragmentShader = `
                     // UNIFORMS
                     // ============================================================
                     uniform sampler2D tAsciiCustomShape;
+                    uniform sampler2D tAsciiChars;
                     uniform sampler2D tDiffuse;
                     uniform sampler2D tPrevious;
                     uniform int uAlgorithm;
@@ -24,6 +25,10 @@ export const fragmentShader = `
                     uniform float uTime;
                     uniform float uSaturation;
                     uniform float uHueShift;
+                    // Effect animation (animates the dither / ASCII on any source)
+                    uniform float uFxAnimate; // 0 or 1
+                    uniform float uFxSpeed;
+                    uniform int uFxMotion;    // 1 drift, 2 zoom, 3 wobble, 4 shimmer
                     uniform float uParam1, uParam2, uParam3, uParam4;
                     uniform float uScale, uMidtones, uHighlights, uLumThreshold, uBlur;
                     uniform float uPointSize;
@@ -84,6 +89,14 @@ export const fragmentShader = `
                     uniform float uVhsEffect;
                     uniform float uEdgeGlow;
                     uniform float uEmboss;
+
+                    // Analog signal effects (composite / VHS / CRT artifacts)
+                    uniform float uAnalogWobble; // sync wobble + tracking jitter + head-switch tear
+                    uniform float uAnalogBleed;  // composite chroma bleed (horizontal)
+                    uniform float uAnalogStatic; // TV snow / signal noise
+                    uniform float uAnalogHum;    // rolling AC hum bar
+                    uniform float uAnalogGhost;  // signal ghost / echo
+                    uniform float uAnalogRate;   // loop-matched phase rate (= active anim speed) so smooth analog motion tiles
 
                     // ASCII / Shape Effect Uniforms
                     uniform float uAsciiCellSizeNew;
@@ -1240,6 +1253,28 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
 
                                 float fLuma = toGray(col);
 
+                                // --- ASCII CHARACTERS (glyph atlas, chosen by luminance) ---
+                                if (uAsciiShape == 31) {
+                                    vec2 cc = (neighborIndex + 0.5) / cellsCountY;
+                                    vec2 pc = (pixelUV - cc) * cellsCountY; // cell-local, [-0.5, 0.5]
+                                    float dC = 1.0;
+                                    if (pc.x > -0.5 && pc.x < 0.5 && pc.y > -0.5 && pc.y < 0.5) {
+                                        vec2 luv = pc + 0.5; // 0..1 within the cell
+                                        float cnt = max(uAsciiCharCount, 1.0);
+                                        // brighter cell -> later glyph (charset is ordered dark -> light)
+                                        float gi = floor(clamp(fLuma, 0.0, 1.0) * (cnt - 1.0) + 0.5);
+                                        float u = (gi + luv.x) / cnt;
+                                        float cov = texture2D(tAsciiChars, vec2(u, 1.0 - luv.y)).a;
+                                        dC = 1.0 - cov;
+                                    }
+                                    globalMinDist = min(globalMinDist, dC);
+                                    if (dC < aa && fLuma > maxPriority) {
+                                        maxPriority = fLuma;
+                                        finalShapeColor = uAsciiUseColor ? col : uAsciiFgColor;
+                                    }
+                                    continue;
+                                }
+
                                 // --- ALGORITHMS ---
                                 float scaleX = uAsciiBaseScale;
                                 float scaleY = uAsciiBaseScale;
@@ -1500,17 +1535,68 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                     // MAIN
                     // ============================================================
 
+                    // Effect animation: displace the source UV over time so the dither /
+                    // ASCII animates on ANY source. Loop-exact (sin/cos period 2pi in ft).
+                    vec2 applyFx(vec2 uv) {
+                        if (uFxAnimate < 0.5) return uv;
+                        float ft = uTime * uFxSpeed;
+                        if (uFxMotion == 1) {            // drift
+                            uv += vec2(sin(ft), cos(ft)) * 0.02;
+                        } else if (uFxMotion == 2) {     // zoom (breathing)
+                            float z = 1.0 + 0.06 * sin(ft);
+                            uv = (uv - 0.5) / z + 0.5;
+                        } else if (uFxMotion == 3) {     // wobble
+                            uv += vec2(sin(ft + uv.y * 12.0), sin(ft + uv.x * 12.0)) * 0.012;
+                        }
+                        return uv;
+                    }
+
+                    // Analog horizontal displacement: sync wobble + per-line tracking jitter
+                    // + a head-switch noise tear near the bottom of the frame.
+                    vec2 analogUV(vec2 uv) {
+                        if (uAnalogWobble <= 0.0) return uv;
+                        // ph completes an integer number of cycles over a loop export, so the
+                        // smooth sync wobble tiles seamlessly. The high-freq jitter/tear are
+                        // noise — a 1-frame seam in them is invisible — so they stay on raw time.
+                        float ph = uTime * uAnalogRate;
+                        uv.x += sin(uv.y * 8.0 + ph * 2.0) * 0.004 * uAnalogWobble;
+                        uv.x += (hash(vec2(floor(uv.y * uResolution.y), floor(uTime * 24.0))) - 0.5) * 0.012 * uAnalogWobble;
+                        float band = smoothstep(0.07, 0.0, uv.y); // bottom edge
+                        uv.x += (hash(vec2(uv.y * 220.0, uTime)) - 0.5) * 0.09 * band * uAnalogWobble;
+                        return uv;
+                    }
+
+                    // Post-dither analog: ghost echo, AC hum bar, TV static.
+                    vec3 applyAnalog(vec3 color, vec2 uv) {
+                        vec3 r = color;
+                        float ph = uTime * uAnalogRate; // loop-locked phase for the smooth hum bar
+                        if (uAnalogGhost > 0.0) {
+                            vec3 g = texture2D(tDiffuse, uv - vec2(0.018, 0.0)).rgb;
+                            r = mix(r, max(r, g * 0.85), uAnalogGhost * 0.6);
+                        }
+                        if (uAnalogHum > 0.0) {
+                            float bar = sin(uv.y * 6.2831853 - ph * 2.0) * 0.5 + 0.5;
+                            r *= 1.0 - uAnalogHum * 0.25 * bar;
+                        }
+                        if (uAnalogStatic > 0.0) {
+                            float sn = hash(uv * uResolution * 0.5 + fract(uTime) * 137.0) - 0.5;
+                            r += sn * uAnalogStatic * 0.6;
+                        }
+                        return r;
+                    }
+
                     void main() {
                         // Algorithm 2: ASCII / Shape Renderer (Bypasses standard pipeline)
                         if (uAlgorithm == 2) {
-                            vec3 asciiResult = renderAsciiShapes(vUv);
+                            vec3 asciiResult = renderAsciiShapes(analogUV(applyFx(vUv)));
                             // Apply CRT effects on top if desired (optional)
                             if (uCRTEffect > 0.0 || uScanlines > 0.0 || uPhosphor || uCurvature > 0.0 || uVignette > 0.0 || uChromatic > 0.0 || uBloom > 0.0) {
                                 asciiResult = applyCRTEffect(asciiResult, vUv, uCRTEffect);
                             }
                             // Apply post-processing (grain, etc.)
                             asciiResult = applyPostProcessing(asciiResult, vUv);
-                            
+                            asciiResult = applyAnalog(asciiResult, vUv);
+
                             gl_FragColor = vec4(asciiResult, 1.0);
                             return;
                         }
@@ -1529,8 +1615,19 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                             sampleUv = floor(vUv / pixelSize) * pixelSize + pixelSize * 0.5;
                         }
 
+                        // Animated effects: pan / zoom / wobble the source under the dither
+                        sampleUv = applyFx(sampleUv);
+                        sampleUv = analogUV(sampleUv); // VHS wobble / tracking
+
                         // Sample input texture (using potentially pixelated coordinates)
                         vec3 color = texture2D(tDiffuse, sampleUv).rgb;
+
+                        // Composite chroma bleed: smear R left / B right before dithering
+                        if (uAnalogBleed > 0.0) {
+                            float o = 0.004 * uAnalogBleed;
+                            color.r = mix(color.r, texture2D(tDiffuse, sampleUv - vec2(o, 0.0)).r, uAnalogBleed * 0.7);
+                            color.b = mix(color.b, texture2D(tDiffuse, sampleUv + vec2(o, 0.0)).b, uAnalogBleed * 0.7);
+                        }
 
                         // Gamma correction (if enabled)
                         if (uGammaCorrect) {
@@ -1546,6 +1643,7 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                             else activeAlgo = uGridAlgorithms[3];
                          }
                          float ditherPattern = getDitherThreshold(coord, activeAlgo);
+                         if (uFxAnimate > 0.5 && uFxMotion == 4) ditherPattern = fract(ditherPattern + uTime * uFxSpeed / 6.2831853); // shimmer
 
                          // Adaptive Thresholding logic
                          if (uAdaptiveThreshold) {
@@ -1694,6 +1792,7 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
 
                         // Post-processing
                         dithered = applyPostProcessing(dithered, vUv);
+                        dithered = applyAnalog(dithered, vUv);
 
                         // Comparison Mode
                         if (uComparison) {

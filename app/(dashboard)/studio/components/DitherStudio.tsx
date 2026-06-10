@@ -605,9 +605,16 @@ export default function DitherStudio() {
   // Returns null when loop export isn't applicable (then we live-record instead).
   const getLoopPlan = useCallback(() => {
     const s = useDitherStore.getState();
-    if (!loopExport || !s.isGenerative || !s.generativeAnimate || s.generativeMotion === 6) return null;
-    if (!generatorExport.renderExportFrame) return null;
-    const period = (2 * Math.PI) / Math.max(s.generativeSpeed, 0.05); // seconds per cycle
+    if (!loopExport || !generatorExport.renderExportFrame) return null;
+    // Loop length comes from whichever animation is active: the generator motion,
+    // or the effect (dither/ASCII) animation. Strobe (gen motion 6) doesn't loop.
+    const genAnim = s.isGenerative && s.generativeAnimate && s.generativeMotion !== 6;
+    // Smooth analog motion (wobble / hum bar) also benefits from a seamless loop;
+    // it's phase-locked to this same speed via uAnalogRate (fallback 0.5).
+    const analogAnim = s.analogWobble > 0 || s.analogHum > 0;
+    const speed = genAnim ? s.generativeSpeed : (s.fxAnimate ? s.fxSpeed : (analogAnim ? 0.5 : 0));
+    if (speed <= 0) return null;
+    const period = (2 * Math.PI) / Math.max(speed, 0.05); // seconds per cycle
     const cycles = Math.max(1, Math.round(exportDuration / period));
     const loopDuration = cycles * period;
     const frames = Math.max(2, Math.round(loopDuration * exportFps));
@@ -741,9 +748,11 @@ export default function DitherStudio() {
     const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
     if (!canvas) return;
 
-    // Preferred path for generated animations: deterministic frames -> 4K MP4.
+    // Preferred path for any animation (generator OR dither/ASCII effect):
+    // deterministic frames -> 4K MP4 (no end-freeze).
     const gs = useDitherStore.getState();
-    if (gs.isGenerative && gs.generativeAnimate) {
+    const analogAnim = gs.analogWobble > 0 || gs.analogHum > 0 || gs.analogStatic > 0 || gs.analogGhost > 0;
+    if ((gs.isGenerative && gs.generativeAnimate) || gs.fxAnimate || analogAnim) {
       const loop = getLoopPlan();
       const fps = exportFps;
       const frames = loop ? loop.frames : Math.max(1, Math.round(exportDuration * fps));
@@ -1107,7 +1116,7 @@ export default function DitherStudio() {
                   />
                 </div>
 
-                {ditherState.isGenerative && ditherState.generativeAnimate && (
+                {(((ditherState.isGenerative && ditherState.generativeAnimate) || ditherState.fxAnimate || ditherState.analogWobble > 0 || ditherState.analogHum > 0)) && (
                   <label className="flex items-center gap-2 mb-2 cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -1117,13 +1126,15 @@ export default function DitherStudio() {
                     />
                     <span className="text-[10px] text-[#666]">
                       🔁 Seamless loop
-                      {loopExport && ditherState.generativeMotion !== 6
-                        ? (() => {
-                            const period = (2 * Math.PI) / Math.max(ditherState.generativeSpeed, 0.05);
-                            const cycles = Math.max(1, Math.round(exportDuration / period));
-                            return ` · ${(cycles * period).toFixed(1)}s`;
-                          })()
-                        : ''}
+                      {(() => {
+                        const genAnim = ditherState.isGenerative && ditherState.generativeAnimate && ditherState.generativeMotion !== 6;
+                        const analogAnim = ditherState.analogWobble > 0 || ditherState.analogHum > 0;
+                        const speed = genAnim ? ditherState.generativeSpeed : (ditherState.fxAnimate ? ditherState.fxSpeed : (analogAnim ? 0.5 : 0));
+                        if (!loopExport || speed <= 0) return '';
+                        const period = (2 * Math.PI) / Math.max(speed, 0.05);
+                        const cycles = Math.max(1, Math.round(exportDuration / period));
+                        return ` · ${(cycles * period).toFixed(1)}s`;
+                      })()}
                     </span>
                   </label>
                 )}

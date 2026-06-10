@@ -53,6 +53,15 @@ export const generatorShader = `
     uniform float uBorder;        // inset frame width in uv (0 = off)
     uniform vec3  uBorderColor;   // frame colour (raw sRGB)
 
+    // ---- Image layer: composite an uploaded image with the pattern ----
+    uniform sampler2D uImage;     // layer image (raw sRGB, may have alpha)
+    uniform float uImageOn;       // 0/1 enabled
+    uniform int   uImageMode;     // 1 alpha-over,2 luma-stencil,3 multiply,4 screen,5 overlay,6 add,7 crossfade
+    uniform float uImageAmount;   // 0..1 strength / opacity
+    uniform float uImageInvert;   // 0/1 flip mask / alpha
+    uniform int   uImageFit;      // 0 cover, 1 contain, 2 stretch
+    uniform vec2  uImageAspect;   // image (w,h) in px, for cover/contain
+
     // ---------- hashing / noise ----------
     float hash21(vec2 p) {
         p = fract(p * vec2(123.34, 456.21));
@@ -123,6 +132,15 @@ export const generatorShader = `
         return hash21(mcell);
     }
 
+    // Signed distance to a flat-top hexagon (apothem r). iq.
+    float sdHexagon(vec2 p, float r) {
+        const vec3 k = vec3(-0.8660254, 0.5, 0.5773503);
+        p = abs(p);
+        p -= 2.0 * min(dot(k.xy, p), 0.0) * k.xy;
+        p -= vec2(clamp(p.x, -k.z * r, k.z * r), r);
+        return length(p) * sign(p.y);
+    }
+
     // ---------- colour helpers ----------
     vec3 samplePalette(float tt) {
         float t = clamp(tt, 0.0, 1.0);
@@ -182,6 +200,43 @@ export const generatorShader = `
         }
         if (wsum <= 0.0) return uColors[0];
         return acc / wsum;
+    }
+
+    // Photoshop-style overlay blend
+    vec3 ovl(vec3 b, vec3 s) {
+        return mix(2.0 * b * s, 1.0 - 2.0 * (1.0 - b) * (1.0 - s), step(0.5, b));
+    }
+
+    // Composite the layer image onto the generated pattern P (raw sRGB in/out).
+    // The image is sampled in stable screen space (vUv), so it acts as a fixed
+    // mask/layer while the pattern moves underneath.
+    vec3 composeImage(vec3 P) {
+        if (uImageOn < 0.5 || uImageMode == 0) return P;
+        vec2 iuv = vUv;
+        if (uImageFit != 2) {                       // cover / contain
+            vec2 sc = uResolution / max(uImageAspect, vec2(1.0));
+            float scale = (uImageFit == 1) ? min(sc.x, sc.y) : max(sc.x, sc.y);
+            vec2 size = uImageAspect * scale;
+            vec2 off = (uResolution - size) * 0.5;
+            iuv = (vUv * uResolution - off) / size;
+        }
+        // 1 inside the image rect, 0 in any contain-letterbox (keep pattern there)
+        float inb = step(0.0, iuv.x) * step(iuv.x, 1.0) * step(0.0, iuv.y) * step(iuv.y, 1.0);
+        vec4 img = texture2D(uImage, clamp(iuv, 0.0, 1.0));
+        vec3 I = img.rgb;
+        float a = clamp(uImageAmount, 0.0, 1.0);
+        float luma = dot(I, vec3(0.299, 0.587, 0.114));
+        float alpha = img.a;
+        if (uImageInvert > 0.5) { luma = 1.0 - luma; alpha = 1.0 - alpha; }
+        vec3 C = P;
+        if (uImageMode == 1)      C = mix(P, I, alpha * a);                      // alpha over (PNG logos)
+        else if (uImageMode == 2) C = mix(I, P, luma * a);                      // luma stencil (pattern fills light)
+        else if (uImageMode == 3) C = mix(P, P * I, a);                         // multiply
+        else if (uImageMode == 4) C = mix(P, 1.0 - (1.0 - P) * (1.0 - I), a);   // screen
+        else if (uImageMode == 5) C = mix(P, ovl(P, I), a);                     // overlay
+        else if (uImageMode == 6) C = P + I * a;                                // add / dodge
+        else if (uImageMode == 7) C = mix(P, I, a);                             // crossfade
+        return mix(P, C, inb);
     }
 
     void main() {
@@ -296,6 +351,58 @@ export const generatorShader = `
             float r = length(ccuv);
             float arms = max(1.0, floor(uScale * 3.0));
             val = fract(a / 6.2831853 * arms + r * (3.0 * uScale) - t / 6.2831853);
+        } else if (uPattern == 15) {    // technical grid / graph paper (minor + major)
+            vec2 p = puv * (8.0 * uScale);
+            vec2 g = abs(fract(p) - 0.5);
+            float minor = 1.0 - smoothstep(0.0, 0.04, min(g.x, g.y));
+            vec2 gm = abs(fract(p * 0.25) - 0.5);
+            float major = 1.0 - smoothstep(0.0, 0.02, min(gm.x, gm.y));
+            val = clamp(minor * 0.5 + major, 0.0, 1.0);
+        } else if (uPattern == 16) {    // isometric line grid (3 axes)
+            vec2 p = ccuv * (8.0 * uScale);
+            float l = 1.0 - smoothstep(0.0, 0.05, abs(fract(p.y) - 0.5));
+            l = max(l, 1.0 - smoothstep(0.0, 0.05, abs(fract(p.x * 0.8660254 + p.y * 0.5) - 0.5)));
+            l = max(l, 1.0 - smoothstep(0.0, 0.05, abs(fract(p.x * 0.8660254 - p.y * 0.5) - 0.5)));
+            val = l;
+        } else if (uPattern == 17) {    // hexagonal grid (honeycomb outlines)
+            vec2 hp = ccuv * (6.0 * uScale);
+            vec2 rr = vec2(1.0, 1.7320508); // pointy-top hex lattice (apothem 0.5)
+            vec2 ha = mod(hp, rr) - rr * 0.5;
+            vec2 hb = mod(hp - rr * 0.5, rr) - rr * 0.5;
+            vec2 gv = dot(ha, ha) < dot(hb, hb) ? ha : hb;
+            val = 1.0 - smoothstep(0.0, 0.05, abs(sdHexagon(gv.yx, 0.5)));
+        } else if (uPattern == 18) {    // concentric polygons (nested hexagon rings)
+            float sides = 6.0;
+            float ang = atan(ccuv.y, ccuv.x);
+            float seg = 6.2831853 / sides;
+            float poly = cos(floor(0.5 + ang / seg) * seg - ang);
+            float d = length(ccuv) * poly / (0.7071 * max(uScale, 0.001));
+            val = fract(d * 5.0);
+        } else if (uPattern == 19) {    // circuit board traces + vias
+            float N = max(2.0, floor(8.0 * uScale));
+            vec2 gp = ccuv * N;
+            vec2 id = floor(gp);
+            vec2 f = fract(gp) - 0.5;
+            float lw = 0.09;
+            float d = (hash21(id + uSeed) < 0.5) ? abs(f.y) : abs(f.x);
+            float trace = 1.0 - smoothstep(0.0, lw, d);
+            float node = (1.0 - smoothstep(lw * 1.3, lw * 1.7, length(f))) * step(0.72, hash21(id + 3.3));
+            val = max(trace, node);
+        } else if (uPattern == 20) {    // perspective floor grid
+            float fy = abs(puv.y - 0.5) + 0.03;
+            float depth = 0.15 / fy;
+            float hl = abs(fract(depth * (6.0 * uScale)) - 0.5);
+            float vx = (puv.x - 0.5) * depth;
+            float vl = abs(fract(vx * (10.0 * uScale)) - 0.5);
+            float lines = max(1.0 - smoothstep(0.0, 0.06, hl), 1.0 - smoothstep(0.0, 0.06, vl));
+            val = lines * smoothstep(0.0, 0.12, fy - 0.03);
+        } else if (uPattern == 21) {    // crosshatch / engraving
+            vec2 p = ccuv * (14.0 * uScale);
+            vec2 e1 = vec2(cos(angRad), sin(angRad));
+            vec2 e2 = vec2(cos(angRad + 1.5708), sin(angRad + 1.5708));
+            float h1 = 1.0 - smoothstep(0.0, 0.06, abs(fract(dot(p, e1)) - 0.5));
+            float h2 = 1.0 - smoothstep(0.0, 0.06, abs(fract(dot(p, e2)) - 0.5));
+            val = max(h1, h2);
         }
 
         if (!haveColor) {
@@ -312,6 +419,9 @@ export const generatorShader = `
             float beat = uTime * (uBPM / 60.0) * uAnimate;
             color *= mix(0.12, 1.0, step(0.5, fract(beat)));
         }
+
+        // composite the uploaded image layer (mask / blend) onto the pattern
+        color = composeImage(color);
 
         if (uGrain > 0.0) {
             // sin(t) (not fract(t)) so animated grain matches at the loop seam

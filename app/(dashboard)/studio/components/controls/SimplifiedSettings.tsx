@@ -95,6 +95,7 @@ const ASCII_SHAPES = [
   { value: 28, label: 'Cloud' },
   { value: 29, label: 'Concentric' },
   { value: 30, label: 'Custom SVG / Image' },
+  { value: 31, label: 'Characters (Text)' },
 ];
 
 export default function SimplifiedSettings() {
@@ -157,7 +158,16 @@ export default function SimplifiedSettings() {
     asciiFgColor,
     asciiUseColor,
     asciiInvert,
+    asciiCharacters,
     setAsciiSetting,
+    fxAnimate,
+    fxSpeed,
+    fxMotion,
+    analogWobble,
+    analogBleed,
+    analogStatic,
+    analogHum,
+    analogGhost,
     comparisonMode,
     setCustomShape,
     customShapeTexture,
@@ -358,6 +368,88 @@ export default function SimplifiedSettings() {
       </div>
 
       {/* ============================================ */}
+      {/* SECTION 1.5: ANIMATE EFFECTS (dither / ASCII) */}
+      <div className={sectionClass}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-medium text-[#2a2a2a]">ANIMATE</h2>
+          <input
+            type="checkbox"
+            checked={fxAnimate}
+            onChange={(e) => setGlobalSetting('fxAnimate', e.target.checked)}
+            className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+          />
+        </div>
+        {fxAnimate && (
+          <div className="space-y-4">
+            <select
+              value={fxMotion}
+              onChange={(e) => setGlobalSetting('fxMotion', Number(e.target.value))}
+              className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer"
+            >
+              <option value={1}>Drift</option>
+              <option value={2}>Zoom</option>
+              <option value={3}>Wobble</option>
+              <option value={4}>Shimmer (dither)</option>
+            </select>
+            <div>
+              <div className="flex justify-between mb-2">
+                <label className="text-xs text-[#666]">Speed</label>
+                <span className="text-xs text-[#2a2a2a] font-mono">{fxSpeed.toFixed(2)}</span>
+              </div>
+              <input
+                type="range" min="0.05" max="3" step="0.05" value={fxSpeed}
+                onChange={(e) => setGlobalSetting('fxSpeed', Number(e.target.value))}
+                className={sliderClass}
+              />
+            </div>
+            <p className="text-[10px] text-[#999]">Animates the dither &amp; ASCII on any source (incl. uploads). Export a seamless loop via /EXPORT → More options → 🔁.</p>
+          </div>
+        )}
+      </div>
+
+      {/* SECTION 1.6: ANALOG SIGNAL FX (composite / VHS / CRT artifacts) */}
+      <div className={sectionClass}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-medium text-[#2a2a2a]">ANALOG</h2>
+          {(analogWobble || analogBleed || analogStatic || analogHum || analogGhost) > 0 && (
+            <button
+              onClick={() => {
+                setGlobalSetting('analogWobble', 0);
+                setGlobalSetting('analogBleed', 0);
+                setGlobalSetting('analogStatic', 0);
+                setGlobalSetting('analogHum', 0);
+                setGlobalSetting('analogGhost', 0);
+              }}
+              className="text-[10px] text-[#999] underline hover:text-[#2a2a2a]"
+            >
+              reset
+            </button>
+          )}
+        </div>
+        <div className="space-y-4">
+          {([
+            ['analogWobble', 'Tracking wobble', analogWobble],
+            ['analogBleed', 'Chroma bleed', analogBleed],
+            ['analogGhost', 'Signal ghost', analogGhost],
+            ['analogHum', 'AC hum bar', analogHum],
+            ['analogStatic', 'TV static', analogStatic],
+          ] as [string, string, number][]).map(([key, label, val]) => (
+            <div key={key}>
+              <div className="flex justify-between mb-2">
+                <label className="text-xs text-[#666]">{label}</label>
+                <span className="text-xs text-[#2a2a2a] font-mono">{val.toFixed(2)}</span>
+              </div>
+              <input
+                type="range" min="0" max="1" step="0.01" value={val}
+                onChange={(e) => setGlobalSetting(key, Number(e.target.value))}
+                className={sliderClass}
+              />
+            </div>
+          ))}
+          <p className="text-[10px] text-[#999]">Composite/VHS artifacts applied before &amp; after the dither. Wobble, hum, ghost &amp; static animate over time &mdash; enable ANIMATE (or a generative motion) and export as a loop to capture the movement.</p>
+        </div>
+      </div>
+
       {/* SECTION 2: ALGORITHM & DITHERING */}
       {/* ============================================ */}
       <div className={sectionClass}>
@@ -482,6 +574,21 @@ export default function SimplifiedSettings() {
                       Custom shape loaded
                     </div>
                   )}
+                </div>
+              )}
+
+              {asciiShape === 31 && (
+                <div className="mt-2">
+                  <label className="block text-xs text-[#666] mb-1">Characters (first = darkest)</label>
+                  <input
+                    type="text"
+                    value={asciiCharacters}
+                    onChange={(e) => setAsciiSetting('asciiCharacters', e.target.value)}
+                    placeholder="@%#*+=-:. "
+                    spellCheck={false}
+                    className="w-full p-2 bg-white border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] focus:outline-none focus:border-[#2a2a2a]"
+                  />
+                  <p className="text-[9px] text-[#999] mt-1">Ordered dark → light. Trailing space keeps highlights blank. Try &quot;01&quot; or &quot;DITHER&quot;.</p>
                 </div>
               )}
             </div>

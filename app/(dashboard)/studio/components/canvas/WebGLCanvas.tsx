@@ -52,6 +52,41 @@ const buildGenColorsUniform = (colors: string[]): Float32Array => {
 const genColorCount = (colors: string[]): number =>
   Math.min(Math.max(colors.length, 2), GEN_COLOR_SLOTS);
 
+// A 1x1 transparent texture so the generator's `uImage` sampler always has a
+// valid binding even when no image layer is loaded (shader skips it via uImageOn).
+let _placeholderTex: THREE.DataTexture | null = null;
+const getPlaceholderTex = (): THREE.DataTexture => {
+  if (!_placeholderTex) {
+    _placeholderTex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1, THREE.RGBAFormat);
+    _placeholderTex.needsUpdate = true;
+  }
+  return _placeholderTex;
+};
+
+// Build a horizontal glyph atlas (white glyphs on transparent) for ASCII text mode.
+// One square cell per character; the shader picks a glyph per source cell by luminance.
+const buildAsciiAtlas = (chars: string): { tex: THREE.CanvasTexture; count: number } => {
+  const list = Array.from(chars && chars.length ? chars : ' ');
+  const cell = 64;
+  const cnv = document.createElement('canvas');
+  cnv.width = cell * list.length;
+  cnv.height = cell;
+  const ctx = cnv.getContext('2d');
+  if (ctx) {
+    ctx.clearRect(0, 0, cnv.width, cnv.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.floor(cell * 0.78)}px "JetBrains Mono", "Courier New", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    list.forEach((ch, i) => ctx.fillText(ch, i * cell + cell / 2, cell / 2 + cell * 0.04));
+  }
+  const tex = new THREE.CanvasTexture(cnv);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  return { tex, count: list.length };
+};
+
 export default function WebGLCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -64,12 +99,15 @@ export default function WebGLCanvas() {
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const renderTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
   const customShapeTexRef = useRef<THREE.Texture | null>(null);
+  const asciiCharsTexRef = useRef<THREE.CanvasTexture | null>(null);
+  const asciiCharsCountRef = useRef(10);
   // Generative source (render-to-texture pre-pass)
   const generatorSceneRef = useRef<THREE.Scene | null>(null);
   const generatorMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
   const generatorMeshRef = useRef<THREE.Mesh | null>(null);
   const generatorTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
   const generatorDirtyRef = useRef(true);
+  const generativeImageTexRef = useRef<THREE.Texture | null>(null); // optional image-layer texture
   // Text / logo overlay (composited into the same canvas so it exports)
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayTextureRef = useRef<THREE.CanvasTexture | null>(null);
@@ -163,6 +201,19 @@ export default function WebGLCanvas() {
     }
   }, [ditherState.customShapeTexture]);
 
+  // Build / rebuild the ASCII glyph atlas when the character set changes
+  useEffect(() => {
+    const old = asciiCharsTexRef.current;
+    const { tex, count } = buildAsciiAtlas(useDitherStore.getState().asciiCharacters);
+    asciiCharsTexRef.current = tex;
+    asciiCharsCountRef.current = count;
+    if (materialRef.current) {
+      materialRef.current.uniforms.tAsciiChars.value = tex;
+      materialRef.current.uniforms.uAsciiCharCount.value = count;
+    }
+    old?.dispose();
+  }, [ditherState.asciiCharacters]);
+
   // Create shader material
   const createMaterial = useCallback((texture: THREE.Texture, width: number, height: number) => {
     if (materialRef.current) {
@@ -250,6 +301,8 @@ export default function WebGLCanvas() {
         uAsciiUseColor: { value: state.asciiUseColor },
         uAsciiInvertNew: { value: state.asciiInvert },
         tAsciiCustomShape: { value: customShapeTexRef.current },
+        tAsciiChars: { value: asciiCharsTexRef.current },
+        uAsciiCharCount: { value: asciiCharsCountRef.current },
 
         // Geometric Halftones
         uHalftoneShape: { value: state.halftoneShape },
@@ -264,6 +317,26 @@ export default function WebGLCanvas() {
         uPosterize: { value: state.posterize },
         uGlitchIntensity: { value: state.glitchIntensity },
         uGlitchSpeed: { value: state.glitchSpeed },
+        uFxAnimate: { value: state.fxAnimate ? 1 : 0 },
+        uFxSpeed: { value: state.fxSpeed },
+        uFxMotion: { value: state.fxMotion },
+
+        // Analog signal effects
+        uAnalogWobble: { value: state.analogWobble },
+        uAnalogBleed: { value: state.analogBleed },
+        uAnalogStatic: { value: state.analogStatic },
+        uAnalogHum: { value: state.analogHum },
+        uAnalogGhost: { value: state.analogGhost },
+        // Phase rate for smooth analog motion — kept equal to the active animation
+        // speed the loop is built around, so wobble/hum tile over a loop export.
+        uAnalogRate: {
+          value:
+            state.isGenerative && state.generativeAnimate && state.generativeMotion !== 6
+              ? state.generativeSpeed
+              : state.fxAnimate
+                ? state.fxSpeed
+                : 0.5,
+        },
 
         // Comparison
         uComparison: { value: state.comparisonMode },
@@ -314,6 +387,14 @@ export default function WebGLCanvas() {
         uGenVignette: { value: s.generativeVignette },
         uBorder: { value: s.generativeBorder },
         uBorderColor: { value: new THREE.Vector3(...hexToRgb01(s.generativeBorderColor)) },
+        // Image layer
+        uImage: { value: generativeImageTexRef.current ?? getPlaceholderTex() },
+        uImageOn: { value: s.generativeImageSrc && generativeImageTexRef.current ? 1 : 0 },
+        uImageMode: { value: s.imageLayerMode },
+        uImageAmount: { value: s.imageLayerAmount },
+        uImageInvert: { value: s.imageLayerInvert ? 1 : 0 },
+        uImageFit: { value: s.imageLayerFit },
+        uImageAspect: { value: new THREE.Vector2(s.generativeImageW || 1, s.generativeImageH || 1) },
       },
     });
     generatorMaterialRef.current = material;
@@ -386,7 +467,8 @@ export default function WebGLCanvas() {
     const genMat = generatorMaterialRef.current;
     if (genMat && generatorSceneRef.current && generatorTargetRef.current) {
       genMat.uniforms.uTime.value = uTimeSeconds;
-      genMat.uniforms.uAnimate.value = 1;
+      // respect the real state so an fx-only export keeps a static generator
+      genMat.uniforms.uAnimate.value = useDitherStore.getState().generativeAnimate ? 1 : 0;
       renderer.setRenderTarget(generatorTargetRef.current);
       renderer.render(generatorSceneRef.current, cam);
       renderer.setRenderTarget(null);
@@ -731,6 +813,10 @@ export default function WebGLCanvas() {
     mat.uniforms.uGenVignette.value = ditherState.generativeVignette;
     mat.uniforms.uBorder.value = ditherState.generativeBorder;
     mat.uniforms.uBorderColor.value = new THREE.Vector3(...hexToRgb01(ditherState.generativeBorderColor));
+    if (mat.uniforms.uImageMode) mat.uniforms.uImageMode.value = ditherState.imageLayerMode;
+    if (mat.uniforms.uImageAmount) mat.uniforms.uImageAmount.value = ditherState.imageLayerAmount;
+    if (mat.uniforms.uImageInvert) mat.uniforms.uImageInvert.value = ditherState.imageLayerInvert ? 1 : 0;
+    if (mat.uniforms.uImageFit) mat.uniforms.uImageFit.value = ditherState.imageLayerFit;
     generatorDirtyRef.current = true; // re-render even while paused
   }, [
     ditherState.isGenerative,
@@ -758,7 +844,55 @@ export default function WebGLCanvas() {
     ditherState.generativeVignette,
     ditherState.generativeBorder,
     ditherState.generativeBorderColor,
+    ditherState.imageLayerMode,
+    ditherState.imageLayerAmount,
+    ditherState.imageLayerInvert,
+    ditherState.imageLayerFit,
   ]);
+
+  // Load the optional image-layer texture (data URL -> THREE.Texture) and feed it
+  // to the generator material. Sampled raw (default colorSpace) + flipY so it
+  // composites in the same sRGB space as the pattern and appears upright.
+  useEffect(() => {
+    const src = ditherState.generativeImageSrc;
+    if (!src) {
+      // clear: drop the texture and disable the layer
+      if (generativeImageTexRef.current) {
+        generativeImageTexRef.current.dispose();
+        generativeImageTexRef.current = null;
+      }
+      const mat = generatorMaterialRef.current;
+      if (mat?.uniforms.uImage) {
+        mat.uniforms.uImage.value = getPlaceholderTex();
+        mat.uniforms.uImageOn.value = 0;
+        generatorDirtyRef.current = true;
+      }
+      return;
+    }
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (cancelled) return;
+      const tex = new THREE.Texture(img);
+      tex.needsUpdate = true; // default colorSpace (raw) + flipY=true, matching the main image path
+      if (generativeImageTexRef.current) generativeImageTexRef.current.dispose();
+      generativeImageTexRef.current = tex;
+      const mat = generatorMaterialRef.current;
+      if (mat?.uniforms.uImage) {
+        mat.uniforms.uImage.value = tex;
+        mat.uniforms.uImageOn.value = 1;
+        mat.uniforms.uImageAspect.value.set(img.naturalWidth || 1, img.naturalHeight || 1);
+        generatorDirtyRef.current = true;
+      }
+      // backfill natural dims if the uploader didn't record them
+      const st = useDitherStore.getState();
+      if (!st.generativeImageW || !st.generativeImageH) {
+        st.setGenerativeImage(src, img.naturalWidth, img.naturalHeight);
+      }
+    };
+    img.src = src;
+    return () => { cancelled = true; };
+  }, [ditherState.generativeImageSrc]);
 
   // ---- Text / logo overlay (drawn on a 2D canvas -> CanvasTexture -> quad on top
   //      of the main scene, so it is captured by every export path) ----
@@ -964,6 +1098,21 @@ export default function WebGLCanvas() {
     if (material.uniforms.uPosterize) material.uniforms.uPosterize.value = ditherState.posterize;
     if (material.uniforms.uGlitchIntensity) material.uniforms.uGlitchIntensity.value = ditherState.glitchIntensity;
     if (material.uniforms.uGlitchSpeed) material.uniforms.uGlitchSpeed.value = ditherState.glitchSpeed;
+    if (material.uniforms.uFxAnimate) material.uniforms.uFxAnimate.value = ditherState.fxAnimate ? 1 : 0;
+    if (material.uniforms.uFxSpeed) material.uniforms.uFxSpeed.value = ditherState.fxSpeed;
+    if (material.uniforms.uFxMotion) material.uniforms.uFxMotion.value = ditherState.fxMotion;
+    if (material.uniforms.uAnalogWobble) material.uniforms.uAnalogWobble.value = ditherState.analogWobble;
+    if (material.uniforms.uAnalogBleed) material.uniforms.uAnalogBleed.value = ditherState.analogBleed;
+    if (material.uniforms.uAnalogStatic) material.uniforms.uAnalogStatic.value = ditherState.analogStatic;
+    if (material.uniforms.uAnalogHum) material.uniforms.uAnalogHum.value = ditherState.analogHum;
+    if (material.uniforms.uAnalogGhost) material.uniforms.uAnalogGhost.value = ditherState.analogGhost;
+    if (material.uniforms.uAnalogRate)
+      material.uniforms.uAnalogRate.value =
+        ditherState.isGenerative && ditherState.generativeAnimate && ditherState.generativeMotion !== 6
+          ? ditherState.generativeSpeed
+          : ditherState.fxAnimate
+            ? ditherState.fxSpeed
+            : 0.5;
 
     // Video/Animation
     material.uniforms.uFrameBlending.value = ditherState.frameBlending;
