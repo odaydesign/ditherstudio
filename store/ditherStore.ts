@@ -179,6 +179,10 @@ export interface DitherState {
   analogStatic: number;
   analogHum: number;
   analogGhost: number;
+
+  // Video export quality: false = H.264/4K (plays everywhere, colors chroma-aligned);
+  // true = VP9/8K full-detail (exact colors at full res, but .mp4 only plays in VLC/Chrome).
+  videoMaxDetail: boolean;
   customShapeTexture: string | null; // Data URL for custom SVG/Image
 
   // Geometric Halftones (Efecto-style)
@@ -392,6 +396,7 @@ const defaultState = {
   analogStatic: 0,
   analogHum: 0,
   analogGhost: 0,
+  videoMaxDetail: false,
   customShapeTexture: null,
 
   // Geometric Halftones

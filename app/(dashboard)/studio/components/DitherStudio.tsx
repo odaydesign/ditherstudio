@@ -266,6 +266,21 @@ const pickAvcCodec = async (w: number, h: number, fps: number, bitrate: number):
   return '';
 };
 
+// Pick a VP9 codec string for the given size (VP9 reaches 8K). Used by the
+// "max detail" path, which encodes at 2x so a fine dither survives 4:2:0.
+const pickVp9Codec = async (w: number, h: number, fps: number, bitrate: number): Promise<string> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const VE: any = (typeof window !== 'undefined') ? (window as any).VideoEncoder : undefined;
+  if (!VE?.isConfigSupported) return '';
+  for (const codec of ['vp09.00.62.08', 'vp09.00.61.08', 'vp09.00.60.08', 'vp09.00.51.08', 'vp09.00.50.08', 'vp09.00.41.08']) {
+    try {
+      const r = await VE.isConfigSupported({ codec, width: w, height: h, bitrate, framerate: fps });
+      if (r?.supported) return codec;
+    } catch { /* try next */ }
+  }
+  return '';
+};
+
 export default function DitherStudio() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [jpegQuality, setJpegQuality] = useState(0.95);
@@ -687,10 +702,34 @@ export default function DitherStudio() {
     if (!w0?.VideoEncoder || !w0?.VideoFrame) return false;
     if (!generatorExport.beginExport || !generatorExport.renderExportFrame || !generatorExport.endExport) return false;
 
-    const { w, h } = exportDims();
-    const bitrate = videoBitrate(w, h, fps);
-    const codec = await pickAvcCodec(w, h, fps, bitrate);
+    // Video codecs only encode 4:2:0 (one chroma sample per 2x2 block), which
+    // averages neighbouring colours and destroys a fine dither's exact palette.
+    // Fix: render each dithered pixel as a 2x2 block (render at half the encode
+    // size, then nearest-neighbour upscale 2x) so the chroma grid aligns to it.
+    //   - Default (H.264): encode <=4K -> render <=2K. Plays everywhere.
+    //   - Max detail (VP9): render full 4K, encode 2x up to 8K. Exact colours at
+    //     full detail, but the .mp4 only plays in VLC/Chrome.
+    const even = (n: number) => Math.max(2, Math.floor(n / 2) * 2);
+    const fitInto = (bw: number, bh: number, maxW: number, maxH: number): [number, number] => {
+      const k = Math.min(1, maxW / bw, maxH / bh);
+      return [even(bw * k), even(bh * k)];
+    };
+    const base = exportDims();
+    const maxDetail = useDitherStore.getState().videoMaxDetail;
+    let encodeW: number, encodeH: number, muxCodec: 'avc' | 'vp9', codec: string;
+    const bitrate0 = videoBitrate(base.w * (maxDetail ? 2 : 1), base.h * (maxDetail ? 2 : 1), fps);
+    if (maxDetail) {
+      [encodeW, encodeH] = fitInto(base.w * 2, base.h * 2, 8192, 4320);
+      muxCodec = 'vp9';
+      codec = await pickVp9Codec(encodeW, encodeH, fps, bitrate0);
+    } else {
+      [encodeW, encodeH] = fitInto(base.w, base.h, 4096, 4096);
+      muxCodec = 'avc';
+      codec = await pickAvcCodec(encodeW, encodeH, fps, bitrate0);
+    }
     if (!codec) return false;
+    const renderW = even(encodeW / 2), renderH = even(encodeH / 2);
+    const bitrate = videoBitrate(encodeW, encodeH, fps);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let Muxer: any, ArrayBufferTarget: any;
@@ -698,11 +737,16 @@ export default function DitherStudio() {
 
     setIsExporting(true);
     setExportProgress(0);
-    const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+    const srcCanvas = document.querySelector('canvas') as HTMLCanvasElement;
+    // Offscreen target the renderer canvas is nearest-upscaled into (2x).
+    const up = document.createElement('canvas');
+    up.width = encodeW; up.height = encodeH;
+    const upCtx = up.getContext('2d')!;
+    upCtx.imageSmoothingEnabled = false;
 
     const muxer = new Muxer({
       target: new ArrayBufferTarget(),
-      video: { codec: 'avc', width: w, height: h, frameRate: fps },
+      video: { codec: muxCodec, width: encodeW, height: encodeH, frameRate: fps },
       fastStart: 'in-memory',
     });
     let encError: unknown = null;
@@ -710,16 +754,17 @@ export default function DitherStudio() {
       output: (chunk: unknown, meta: unknown) => muxer.addVideoChunk(chunk, meta),
       error: (e: unknown) => { encError = e; },
     });
-    encoder.configure({ codec, width: w, height: h, bitrate, framerate: fps });
+    encoder.configure({ codec, width: encodeW, height: encodeH, bitrate, framerate: fps });
 
-    generatorExport.beginExport(w, h);
+    generatorExport.beginExport(renderW, renderH);
     try {
       const usPerFrame = 1_000_000 / fps;
       const keyEvery = Math.max(1, Math.round(fps)); // ~1 keyframe / second
       for (let i = 0; i < frames; i++) {
         if (encError) throw encError;
         generatorExport.renderExportFrame!(timeFn(i));
-        const frame = new w0.VideoFrame(canvas, { timestamp: Math.round(i * usPerFrame), duration: Math.round(usPerFrame) });
+        upCtx.drawImage(srcCanvas, 0, 0, encodeW, encodeH); // nearest 2x -> chroma-aligned
+        const frame = new w0.VideoFrame(up, { timestamp: Math.round(i * usPerFrame), duration: Math.round(usPerFrame) });
         encoder.encode(frame, { keyFrame: i % keyEvery === 0 });
         frame.close();
         setExportProgress(Math.round(((i + 1) / frames) * 92));
@@ -1138,6 +1183,24 @@ export default function DitherStudio() {
                     </span>
                   </label>
                 )}
+
+                <label className="flex items-start gap-2 mb-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={ditherState.videoMaxDetail}
+                    onChange={(e) => ditherState.setGlobalSetting('videoMaxDetail', e.target.checked)}
+                    className="w-3.5 h-3.5 mt-0.5 accent-[#2a2a2a]"
+                  />
+                  <span className="text-[10px] text-[#666] leading-snug">
+                    Max-detail video (VP9 · up to 8K)
+                    <br />
+                    <span className="text-[#999]">
+                      {ditherState.videoMaxDetail
+                        ? '⚠ exact colors at full detail, but the .mp4 plays only in VLC / Chrome'
+                        : 'off = H.264/4K, plays everywhere (dither rendered a touch coarser to keep colors exact)'}
+                    </span>
+                  </span>
+                </label>
 
                 {isExporting && (
                   <div className="mb-2">
