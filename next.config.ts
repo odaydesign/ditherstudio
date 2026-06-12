@@ -1,12 +1,13 @@
 import type { NextConfig } from "next";
 
-// Static export (./out) is ONLY for the desktop (Electron) build, which loads the
-// app from disk. The web deploy (Firebase App Hosting) must stay a normal Next
-// build that runs a server, so gate the export config behind BUILD_TARGET=desktop
-// (set by the `build:desktop` script). A plain `next build` => normal server app.
-const isDesktop = process.env.BUILD_TARGET === "desktop";
+// Static export (./out) is used by BOTH the desktop (Electron) build and the
+// Firebase Hosting (static CDN) deploy. A plain `next build` stays a normal
+// server build (e.g. for Firebase App Hosting). Gate the export behind
+// BUILD_TARGET=desktop or STATIC_EXPORT=true (set by the build:web/deploy scripts).
+const staticExport =
+  process.env.BUILD_TARGET === "desktop" || process.env.STATIC_EXPORT === "true";
 
-const nextConfig: NextConfig = isDesktop
+const nextConfig: NextConfig = staticExport
   ? { output: "export", trailingSlash: true, images: { unoptimized: true } }
   : {};
 

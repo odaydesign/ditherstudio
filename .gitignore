@@ -48,3 +48,6 @@ next-env.d.ts
 
 # Playwright MCP test artifacts
 .playwright-mcp/
+
+# Firebase deploy cache
+.firebase/

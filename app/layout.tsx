@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Dither Studio Pro - Advanced Real-Time Dithering",
-  description: "Professional dithering application with 50+ algorithms, GPU acceleration, and advanced color processing",
+  title: "DitherStudio",
+  description: "Real-time dithering & generative graphics studio — 30+ pattern generators, analog FX, ASCII, and seamless 4K loop export.",
 };
 
 export default function RootLayout({
