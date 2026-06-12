@@ -47,6 +47,7 @@ export const generatorShader = `
     // Symmetry & composition
     uniform int   uMirror;        // 0 none,1 mirror-X,2 mirror-Y,3 quad,4 kaleidoscope
     uniform float uKaleido;       // kaleidoscope segment count
+    uniform int   uPolar;         // coord warp: 0 none,1 polar,2 log-polar,3 twist/spiral
     uniform float uTileX;         // repeat count X (<=1 = off)
     uniform float uTileY;         // repeat count Y (<=1 = off)
     uniform float uGenVignette;   // edge darkening 0..1
@@ -207,6 +208,32 @@ export const generatorShader = `
         return mix(2.0 * b * s, 1.0 - 2.0 * (1.0 - b) * (1.0 - s), step(0.5, b));
     }
 
+    // ---------- raymarch helpers (Group B 3D patterns) ----------
+    mat2 rot2(float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+    // Gyroid implicit surface, thickened into walls (rough distance estimate).
+    float gyroidMap(vec3 p) { return (abs(dot(sin(p), cos(p.zxy))) - 0.4) * 0.4; }
+    // Infinitely repeated square tube -> corridor of pillars.
+    float corridorMap(vec3 p) {
+        p.xy = mod(p.xy, 2.0) - 1.0;     // cell centre at 0; thin pillar so gaps stay open
+        vec2 d = abs(p.xy) - 0.3;
+        return max(d.x, d.y);
+    }
+    // Power-8 mandelbulb distance estimator.
+    float mandelbulbMap(vec3 p) {
+        vec3 z = p; float dr = 1.0; float r = 0.0;
+        for (int i = 0; i < 5; i++) {
+            r = length(z);
+            if (r > 2.0) break;
+            float th = acos(clamp(z.z / r, -1.0, 1.0));
+            float ph = atan(z.y, z.x);
+            dr = pow(r, 7.0) * 8.0 * dr + 1.0;
+            float zr = pow(r, 8.0);
+            th *= 8.0; ph *= 8.0;
+            z = zr * vec3(sin(th) * cos(ph), sin(th) * sin(ph), cos(th)) + p;
+        }
+        return 0.5 * log(max(r, 0.0001)) * r / dr;
+    }
+
     // Composite the layer image onto the generated pattern P (raw sRGB in/out).
     // The image is sampled in stable screen space (vUv), so it acts as a fixed
     // mask/layer while the pattern moves underneath.
@@ -273,6 +300,19 @@ export const generatorShader = `
             float a = mod(atan(c.y, c.x), seg);
             a = abs(a - seg * 0.5);
             uv = (vec2(cos(a), sin(a)) * length(c)) / asp + 0.5;
+        }
+
+        // polar / log-polar / twist coordinate warp (applies to ANY pattern)
+        if (uPolar > 0) {
+            vec2 c = (uv - 0.5) * asp;
+            float ang = atan(c.y, c.x) / 6.2831853 + 0.5;
+            float rad = length(c);
+            if (uPolar == 1) uv = vec2(ang, rad);                       // wrap around a circle
+            else if (uPolar == 2) uv = vec2(ang, log(rad + 0.04));      // droste / infinite zoom
+            else if (uPolar == 3) {                                     // twist into a spiral
+                float a = atan(c.y, c.x) + rad * 6.2831853 * uScale;
+                uv = (vec2(cos(a), sin(a)) * rad) / asp + 0.5;
+            }
         }
 
         if (uWarp > 0.0) {              // domain warp
@@ -403,6 +443,125 @@ export const generatorShader = `
             float h1 = 1.0 - smoothstep(0.0, 0.06, abs(fract(dot(p, e1)) - 0.5));
             float h2 = 1.0 - smoothstep(0.0, 0.06, abs(fract(dot(p, e2)) - 0.5));
             val = max(h1, h2);
+        } else if (uPattern == 22) {    // quasicrystal (rotated grating interference)
+            float q = 0.0;
+            float f = 12.0 * uScale;
+            for (int i = 0; i < 7; i++) {
+                float a = angRad + float(i) * 3.14159265 / 7.0;
+                q += cos(dot(ccuv, vec2(cos(a), sin(a))) * f + t);
+            }
+            val = q / 7.0 * 0.5 + 0.5;
+        } else if (uPattern == 23) {    // kaleidoscopic IFS (kali fold) — alien lattice
+            vec2 z = ccuv * (1.6 / max(uScale, 0.1));
+            vec2 c = vec2(0.7 + 0.25 * sin(t), 0.6 + 0.25 * cos(t));
+            float m = 1000.0;
+            for (int i = 0; i < 12; i++) {
+                z = abs(z) / max(dot(z, z), 0.0015) - c;
+                m = min(m, length(z));
+            }
+            val = clamp(m, 0.0, 1.0);
+        } else if (uPattern == 24) {    // julia fractal (animated seed orbits a circle)
+            vec2 z = ccuv * (2.4 / max(uScale, 0.1));
+            vec2 c = 0.7885 * vec2(cos(t), sin(t));
+            float it = 0.0;
+            for (int i = 0; i < 64; i++) {
+                z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+                if (dot(z, z) > 16.0) break;
+                it += 1.0;
+            }
+            float d2 = dot(z, z);
+            float sm = it;
+            if (d2 > 1.0) sm = it + 1.0 - log2(0.5 * log2(d2));
+            val = sqrt(clamp(sm / 30.0, 0.0, 1.0)); // sqrt spreads the dark escape bands
+        } else if (uPattern == 25) {    // metaballs (liquid blobs)
+            float m = 0.0;
+            for (int i = 0; i < 6; i++) {
+                float fi = float(i);
+                vec2 c = 0.6 * vec2(sin(t + fi * 1.7 + uSeed), cos(t + fi * 2.3 + uSeed));
+                m += 0.05 / max(dot(ccuv - c, ccuv - c), 0.001);
+            }
+            val = clamp(m * (0.5 / max(uScale, 0.1)), 0.0, 1.0);
+        } else if (uPattern == 26) {    // marble / turbulence veins
+            vec2 p = puv * (3.0 * uScale) + uSeed;
+            float turb = fbm(p + vec2(sin(t), cos(t)) * 0.3);
+            val = sin((puv.x + puv.y) * (8.0 * uScale) + turb * 6.0) * 0.5 + 0.5;
+        } else if (uPattern == 27) {    // caustics (iterative water light)
+            vec2 p = ccuv * (6.0 * uScale) + uSeed;
+            float v = 0.0;
+            for (int i = 0; i < 4; i++) {
+                p += vec2(sin(t + p.y), cos(t + p.x)) * 0.5;
+                v += 0.5 / length(sin(p) + 1.3);
+            }
+            val = clamp(v * 0.35, 0.0, 1.0);
+        } else if (uPattern == 28) {    // hyperspace starfield (radial streaks)
+            float ang = atan(ccuv.y, ccuv.x);
+            float rad = length(ccuv);
+            float id = floor((ang / 6.2831853 + 0.5) * 120.0);
+            float h = hash21(vec2(id, 1.0) + uSeed);
+            float z = fract(rad * (1.5 / max(uScale, 0.1)) - t / 6.2831853 + h);
+            val = smoothstep(0.8, 1.0, z) * step(0.55, h) * clamp(rad * 2.0, 0.0, 1.0);
+        } else if (uPattern == 29) {    // lissajous oscilloscope curve
+            float v = 0.0;
+            for (int i = 0; i < 140; i++) {
+                float s = float(i) / 140.0 * 6.2831853;
+                vec2 q = 0.45 * vec2(sin(s * 3.0 + t), sin(s * 2.0));
+                v = max(v, smoothstep(0.025, 0.0, distance(ccuv, q)));
+            }
+            val = v;
+        } else if (uPattern == 30) {    // op-art interference rings
+            vec2 c1 = vec2(-0.18 + 0.05 * sin(t), 0.0);
+            vec2 c2 = vec2(0.18 - 0.05 * sin(t), 0.0);
+            float f = 60.0 * uScale;
+            val = (sin(length(ccuv - c1) * f) * sin(length(ccuv - c2) * f)) * 0.5 + 0.5;
+        } else if (uPattern == 31) {    // gyroid — volumetric shells (robust, layered)
+            vec3 rd = normalize(vec3(ccuv, 1.3));
+            vec3 ro = vec3(0.0, 0.0, -2.0);
+            float k = 1.4 / max(uScale, 0.2);
+            float dens = 0.0;
+            for (int i = 0; i < 56; i++) {
+                vec3 p = (ro + rd * (float(i) * 0.09)) * k + t; // +t loops at 2pi
+                float g = dot(sin(p), cos(p.zxy));
+                dens += smoothstep(0.5, 0.28, abs(g)) * (1.0 - float(i) / 70.0); // near-surface shells, depth-faded
+            }
+            val = clamp(dens * 0.08, 0.0, 1.0);
+        } else if (uPattern == 32) {    // raymarched infinite corridor (lit)
+            vec3 rd = normalize(vec3(ccuv, 1.2));
+            vec3 ro = vec3(0.0, 0.0, 0.0);          // gap centre (pillars sit at odd coords)
+            float zoff = t / 6.2831853 * 2.0;       // one 2-unit cell per loop
+            float k = 1.0 / max(uScale, 0.3);
+            float tt = 0.0; bool hit = false; vec3 hp = vec3(0.0);
+            for (int i = 0; i < 64; i++) {
+                hp = ro + rd * tt; hp.z += zoff; hp *= k;
+                float d = corridorMap(hp) / k;
+                if (d < 0.002) { hit = true; break; }
+                tt += d;
+                if (tt > 16.0) break;
+            }
+            float sh = 0.0;
+            if (hit) {
+                vec2 e = vec2(0.02, 0.0);
+                vec3 n = normalize(vec3(
+                    corridorMap(hp + e.xyy) - corridorMap(hp - e.xyy),
+                    corridorMap(hp + e.yxy) - corridorMap(hp - e.yxy),
+                    corridorMap(hp + e.yyx) - corridorMap(hp - e.yyx)));
+                float diff = max(0.0, dot(n, normalize(vec3(0.4, 0.7, -0.5))));
+                sh = (0.2 + 0.8 * diff) * (1.0 - tt / 16.0);
+            }
+            val = clamp(sh, 0.0, 1.0);
+        } else if (uPattern == 33) {    // raymarched mandelbulb
+            vec3 rd = normalize(vec3(ccuv, 1.4));
+            vec3 ro = vec3(0.0, 0.0, -2.4);
+            float k = 1.0 / max(uScale, 0.4);
+            float tt = 0.0; float st = 0.0; float hit = 0.0;
+            for (int i = 0; i < 48; i++) {
+                vec3 p = ro + rd * tt;
+                p.xz = rot2(t) * p.xz;             // rotate -> loops at 2pi
+                float d = mandelbulbMap(p * k) / k;
+                if (d < 0.0015) { hit = 1.0; break; }
+                tt += d; st += 1.0;
+                if (tt > 6.0) break;
+            }
+            val = clamp(hit * 0.35 + (1.0 - st / 48.0) * 0.85, 0.0, 1.0);
         }
 
         if (!haveColor) {

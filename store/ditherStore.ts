@@ -35,6 +35,7 @@ export interface DitherState {
   // Symmetry & composition
   generativeMirror: number; // 0 none,1 X,2 Y,3 quad,4 kaleidoscope
   generativeKaleido: number; // kaleidoscope segments
+  generativePolar: number; // coord warp: 0 none,1 polar,2 log-polar,3 twist
   generativeTileX: number; // repeat X (1 = off)
   generativeTileY: number; // repeat Y (1 = off)
   generativeVignette: number; // edge darkening 0..1
@@ -258,6 +259,7 @@ const defaultState = {
   generativeBPM: 120,
   generativeMirror: 0,
   generativeKaleido: 6,
+  generativePolar: 0,
   generativeTileX: 1,
   generativeTileY: 1,
   generativeVignette: 0,
@@ -465,6 +467,7 @@ export const useDitherStore = create<DitherState>((set) => ({
     generativeBPM: state.generativeBPM,
     generativeMirror: state.generativeMirror,
     generativeKaleido: state.generativeKaleido,
+    generativePolar: state.generativePolar,
     generativeTileX: state.generativeTileX,
     generativeTileY: state.generativeTileY,
     generativeVignette: state.generativeVignette,
@@ -535,7 +538,7 @@ export const useDitherStore = create<DitherState>((set) => ({
     const count = ri(3, 6);
     const colors = Array.from({ length: count }, () => rhex());
     set({
-      generativePattern: ri(0, 6),
+      generativePattern: ri(0, 33),
       generativeColors: colors,
       generativeAngle: rf(0, 360),
       generativeScale: rf(0.5, 2.5),

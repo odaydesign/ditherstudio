@@ -382,6 +382,7 @@ export default function WebGLCanvas() {
         uBPM: { value: s.generativeBPM },
         uMirror: { value: s.generativeMirror },
         uKaleido: { value: s.generativeKaleido },
+        uPolar: { value: s.generativePolar },
         uTileX: { value: s.generativeTileX },
         uTileY: { value: s.generativeTileY },
         uGenVignette: { value: s.generativeVignette },
@@ -808,6 +809,7 @@ export default function WebGLCanvas() {
     mat.uniforms.uBPM.value = ditherState.generativeBPM;
     mat.uniforms.uMirror.value = ditherState.generativeMirror;
     mat.uniforms.uKaleido.value = ditherState.generativeKaleido;
+    if (mat.uniforms.uPolar) mat.uniforms.uPolar.value = ditherState.generativePolar;
     mat.uniforms.uTileX.value = ditherState.generativeTileX;
     mat.uniforms.uTileY.value = ditherState.generativeTileY;
     mat.uniforms.uGenVignette.value = ditherState.generativeVignette;
@@ -839,6 +841,7 @@ export default function WebGLCanvas() {
     ditherState.generativeBPM,
     ditherState.generativeMirror,
     ditherState.generativeKaleido,
+    ditherState.generativePolar,
     ditherState.generativeTileX,
     ditherState.generativeTileY,
     ditherState.generativeVignette,

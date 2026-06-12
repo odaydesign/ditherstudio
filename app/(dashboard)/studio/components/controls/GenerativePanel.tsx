@@ -27,6 +27,18 @@ const PATTERNS = [
   { value: 19, label: 'Circuit Board' },
   { value: 20, label: 'Perspective Grid' },
   { value: 21, label: 'Crosshatch' },
+  { value: 22, label: 'Quasicrystal' },
+  { value: 23, label: 'Kaleidoscope IFS' },
+  { value: 24, label: 'Julia Fractal' },
+  { value: 25, label: 'Metaballs' },
+  { value: 26, label: 'Marble / Veins' },
+  { value: 27, label: 'Caustics' },
+  { value: 28, label: 'Starfield' },
+  { value: 29, label: 'Lissajous' },
+  { value: 30, label: 'Op-Art Rings' },
+  { value: 31, label: 'Gyroid (3D)' },
+  { value: 32, label: 'Corridor (3D)' },
+  { value: 33, label: 'Mandelbulb (3D)' },
 ];
 
 const MOTIONS = [
@@ -74,7 +86,7 @@ const GEN_PRESET_KEYS = [
   'generativePattern', 'generativeAngle', 'generativeScale', 'generativeWarp', 'generativeWarpFreq',
   'generativeGrain', 'generativeContrast', 'generativeBlend', 'generativeAnimate', 'generativeMotion',
   'generativeSpeed', 'generativeSeed', 'generativeGridCols', 'generativeGridRows', 'generativeSteps',
-  'generativeBPM', 'generativeMirror', 'generativeKaleido', 'generativeTileX', 'generativeTileY',
+  'generativeBPM', 'generativeMirror', 'generativeKaleido', 'generativePolar', 'generativeTileX', 'generativeTileY',
   'generativeVignette', 'generativeBorder', 'generativeBorderColor',
 ];
 const USER_PRESET_STORAGE = 'dither.genPresets.v1';
@@ -301,6 +313,94 @@ const GEN_PRESETS: { name: string; apply: () => void }[] = [
       s.setGlobalSetting('scale', 1);
     },
   },
+  {
+    name: 'Quasicrystal',
+    apply: () => {
+      const s = useDitherStore.getState();
+      s.setGenerativeColors(['#0c0a1f', '#3b2f8f', '#6f6bd1', '#b9c0f2', '#f2f4ff']);
+      s.setGenerativeSetting('generativePattern', 22);
+      s.setGenerativeSetting('generativeScale', 1.0);
+      s.setGenerativeSetting('generativeWarp', 0);
+      s.setGenerativeSetting('generativeContrast', 1.2);
+      s.setGenerativeSetting('generativeGridCols', 0);
+      s.setGenerativeSetting('generativeGridRows', 0);
+      s.setGenerativeSetting('generativeSteps', 0);
+      s.setGenerativeSetting('generativeMirror', 0);
+      s.setGenerativeSetting('generativeAnimate', true);
+      s.setGenerativeSetting('generativeMotion', 1);
+      s.setGenerativeSetting('generativeSpeed', 0.4);
+      s.setColorMode(0);
+      s.setGlobalSetting('colors', 6);
+      s.setAlgorithm(1);
+      s.setGlobalSetting('scale', 2);
+    },
+  },
+  {
+    name: 'Fractal',
+    apply: () => {
+      const s = useDitherStore.getState();
+      s.setGenerativeColors(['#01030a', '#0a2a5e', '#2f7fd1', '#9fd0f0', '#fef3c0', '#f0822f']);
+      s.setGenerativeSetting('generativePattern', 24); // julia
+      s.setGenerativeSetting('generativeScale', 1.0);
+      s.setGenerativeSetting('generativeWarp', 0);
+      s.setGenerativeSetting('generativeContrast', 1.15);
+      s.setGenerativeSetting('generativeGridCols', 0);
+      s.setGenerativeSetting('generativeGridRows', 0);
+      s.setGenerativeSetting('generativeSteps', 0);
+      s.setGenerativeSetting('generativeMirror', 0);
+      s.setGenerativeSetting('generativeAnimate', true);
+      s.setGenerativeSetting('generativeMotion', 1);
+      s.setGenerativeSetting('generativeSpeed', 0.3);
+      s.setColorMode(0);
+      s.setGlobalSetting('colors', 8);
+      s.setAlgorithm(1);
+      s.setGlobalSetting('scale', 2);
+    },
+  },
+  {
+    name: 'Lava',
+    apply: () => {
+      const s = useDitherStore.getState();
+      s.setGenerativeColors(['#1a0500', '#7a1500', '#e0490a', '#ffb020', '#fff1c0']);
+      s.setGenerativeSetting('generativePattern', 25); // metaballs
+      s.setGenerativeSetting('generativeScale', 1.0);
+      s.setGenerativeSetting('generativeWarp', 0);
+      s.setGenerativeSetting('generativeContrast', 1.3);
+      s.setGenerativeSetting('generativeGridCols', 0);
+      s.setGenerativeSetting('generativeGridRows', 0);
+      s.setGenerativeSetting('generativeSteps', 0);
+      s.setGenerativeSetting('generativeMirror', 0);
+      s.setGenerativeSetting('generativeAnimate', true);
+      s.setGenerativeSetting('generativeMotion', 1);
+      s.setGenerativeSetting('generativeSpeed', 0.5);
+      s.setColorMode(0);
+      s.setGlobalSetting('colors', 8);
+      s.setAlgorithm(1);
+      s.setGlobalSetting('scale', 2);
+    },
+  },
+  {
+    name: 'Gyroid 3D',
+    apply: () => {
+      const s = useDitherStore.getState();
+      s.setGenerativeColors(['#070a14', '#1e3a4f', '#3f8f8a', '#a7d49a', '#f3efd0']);
+      s.setGenerativeSetting('generativePattern', 31); // gyroid
+      s.setGenerativeSetting('generativeScale', 1.0);
+      s.setGenerativeSetting('generativeWarp', 0);
+      s.setGenerativeSetting('generativeContrast', 1.15);
+      s.setGenerativeSetting('generativeGridCols', 0);
+      s.setGenerativeSetting('generativeGridRows', 0);
+      s.setGenerativeSetting('generativeSteps', 0);
+      s.setGenerativeSetting('generativeMirror', 0);
+      s.setGenerativeSetting('generativeAnimate', true);
+      s.setGenerativeSetting('generativeMotion', 1);
+      s.setGenerativeSetting('generativeSpeed', 0.35);
+      s.setColorMode(0);
+      s.setGlobalSetting('colors', 10);
+      s.setAlgorithm(1);
+      s.setGlobalSetting('scale', 1);
+    },
+  },
 ];
 
 const sliderClass =
@@ -347,7 +447,7 @@ export default function GenerativePanel() {
     generativeWarp, generativeWarpFreq, generativeGrain, generativeContrast,
     generativeBlend, generativeAnimate, generativeMotion, generativeSpeed,
     generativeSeed, generativeGridCols, generativeGridRows, generativeSteps,
-    generativeBPM, generativeMirror, generativeKaleido, generativeTileX,
+    generativeBPM, generativeMirror, generativeKaleido, generativePolar, generativeTileX,
     generativeTileY, generativeVignette, generativeBorder, generativeBorderColor,
     overlayEnabled, overlayText, overlayTextColor, overlaySize, overlayX, overlayY,
     overlayLogo, overlayLogoScale,
@@ -554,6 +654,17 @@ export default function GenerativePanel() {
             <Slider label="Kaleidoscope Segments" value={generativeKaleido} min={2} max={16} step={1}
               onChange={(v) => setGenerativeSetting('generativeKaleido', v)} fmt={(v) => String(Math.round(v))} />
           )}
+          <div>
+            <label className="text-xs text-[#666] block mb-2">Polar Warp</label>
+            <select value={generativePolar}
+              onChange={(e) => setGenerativeSetting('generativePolar', Number(e.target.value))}
+              className={selectClass}>
+              <option value={0}>None</option>
+              <option value={1}>Polar</option>
+              <option value={2}>Log-polar (Droste)</option>
+              <option value={3}>Twist / Spiral</option>
+            </select>
+          </div>
           <Slider label="Tile X" value={generativeTileX} min={1} max={12} step={1}
             onChange={(v) => setGenerativeSetting('generativeTileX', v)} fmt={(v) => v <= 1 ? 'off' : String(Math.round(v))} />
           <Slider label="Tile Y" value={generativeTileY} min={1} max={12} step={1}
