@@ -1,9 +1,9 @@
+# DitherStudio is a 100% client-side Next.js app built as a static export
+# (next.config.ts -> output: 'export'), so Netlify just builds and serves ./out.
+# No Prisma, no server runtime, no @netlify/plugin-nextjs needed.
 [build]
-  command = "npx prisma generate && npm run build"
-  publish = ".next"
+  command = "npm run build"
+  publish = "out"
 
 [build.environment]
-  NETLIFY_NEXT_PLUGIN_SKIP = "true"
-
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+  NODE_VERSION = "20"
