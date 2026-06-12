@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "dev:desktop": "concurrently \"npm run dev\" \"wait-on http://localhost:3002/studio && electron .\"",
-    "build:desktop": "npm run build && electron-builder"
+    "build:desktop": "BUILD_TARGET=desktop next build && electron-builder"
   },
   "build": {
     "appId": "com.ditherstudio.app",
