@@ -377,6 +377,8 @@ export default function WebGLCanvas() {
         uRenderStyle: { value: s.generativeRenderStyle },
         uStyleDensity: { value: s.generativeStyleDensity },
         uStyleAmount: { value: s.generativeStyleAmount },
+        uStyleInvert: { value: s.generativeStyleInvert ? 1 : 0 },
+        uStyleCenter: { value: new THREE.Vector2(s.generativeStyleCenterX, s.generativeStyleCenterY) },
         uMotion: { value: s.generativeMotion },
         uSpeed: { value: s.generativeSpeed },
         uAnimate: { value: s.generativeAnimate ? 1 : 0 },
@@ -808,6 +810,8 @@ export default function WebGLCanvas() {
     if (mat.uniforms.uRenderStyle) mat.uniforms.uRenderStyle.value = ditherState.generativeRenderStyle;
     if (mat.uniforms.uStyleDensity) mat.uniforms.uStyleDensity.value = ditherState.generativeStyleDensity;
     if (mat.uniforms.uStyleAmount) mat.uniforms.uStyleAmount.value = ditherState.generativeStyleAmount;
+    if (mat.uniforms.uStyleInvert) mat.uniforms.uStyleInvert.value = ditherState.generativeStyleInvert ? 1 : 0;
+    if (mat.uniforms.uStyleCenter) mat.uniforms.uStyleCenter.value.set(ditherState.generativeStyleCenterX, ditherState.generativeStyleCenterY);
     mat.uniforms.uMotion.value = ditherState.generativeMotion;
     mat.uniforms.uSpeed.value = ditherState.generativeSpeed;
     mat.uniforms.uAnimate.value = ditherState.generativeAnimate ? 1 : 0;
@@ -843,6 +847,9 @@ export default function WebGLCanvas() {
     ditherState.generativeRenderStyle,
     ditherState.generativeStyleDensity,
     ditherState.generativeStyleAmount,
+    ditherState.generativeStyleInvert,
+    ditherState.generativeStyleCenterX,
+    ditherState.generativeStyleCenterY,
     ditherState.generativeMotion,
     ditherState.generativeSpeed,
     ditherState.generativeSeed,

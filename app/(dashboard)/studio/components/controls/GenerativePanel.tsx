@@ -91,7 +91,8 @@ const BRAND_PALETTES: { name: string; colors: string[] }[] = [
 const GEN_PRESET_KEYS = [
   'generativePattern', 'generativeAngle', 'generativeScale', 'generativeWarp', 'generativeWarpFreq',
   'generativeGrain', 'generativeContrast', 'generativeBlend', 'generativeLineWeight',
-  'generativeRenderStyle', 'generativeStyleDensity', 'generativeStyleAmount', 'generativeAnimate', 'generativeMotion',
+  'generativeRenderStyle', 'generativeStyleDensity', 'generativeStyleAmount',
+  'generativeStyleInvert', 'generativeStyleCenterX', 'generativeStyleCenterY', 'generativeAnimate', 'generativeMotion',
   'generativeSpeed', 'generativeSeed', 'generativeGridCols', 'generativeGridRows', 'generativeSteps',
   'generativeBPM', 'generativeMirror', 'generativeKaleido', 'generativePolar', 'generativeTileX', 'generativeTileY',
   'generativeVignette', 'generativeBorder', 'generativeBorderColor',
@@ -453,6 +454,7 @@ export default function GenerativePanel() {
     generativePattern, generativeColors, generativeAngle, generativeScale,
     generativeWarp, generativeWarpFreq, generativeGrain, generativeContrast,
     generativeBlend, generativeLineWeight, generativeRenderStyle, generativeStyleDensity, generativeStyleAmount,
+    generativeStyleInvert, generativeStyleCenterX, generativeStyleCenterY,
     generativeAnimate, generativeMotion, generativeSpeed,
     generativeSeed, generativeGridCols, generativeGridRows, generativeSteps,
     generativeBPM, generativeMirror, generativeKaleido, generativePolar, generativeTileX,
@@ -626,6 +628,20 @@ export default function GenerativePanel() {
               <Slider label="Flow Displacement" value={generativeStyleAmount} min={0} max={3} step={0.05}
                 onChange={(v) => setGenerativeSetting('generativeStyleAmount', v)} fmt={(v) => v.toFixed(2)} />
             )}
+            {generativeRenderStyle === 4 && (
+              <>
+                <Slider label="Center X" value={generativeStyleCenterX} min={0} max={1} step={0.01}
+                  onChange={(v) => setGenerativeSetting('generativeStyleCenterX', v)} fmt={(v) => v.toFixed(2)} />
+                <Slider label="Center Y" value={generativeStyleCenterY} min={0} max={1} step={0.01}
+                  onChange={(v) => setGenerativeSetting('generativeStyleCenterY', v)} fmt={(v) => v.toFixed(2)} />
+              </>
+            )}
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-xs text-[#666]">Invert (white on black)</span>
+              <input type="checkbox" checked={generativeStyleInvert}
+                onChange={(e) => setGenerativeSetting('generativeStyleInvert', e.target.checked)}
+                className="w-4 h-4 cursor-pointer accent-[#2a2a2a]" />
+            </label>
           </div>
         )}
         <div className="space-y-4">

@@ -28,6 +28,9 @@ export interface DitherState {
   generativeRenderStyle: number; // 0 fill,1 dots,2 flow lines,3 hatch,4 radial
   generativeStyleDensity: number; // dots/lines per unit
   generativeStyleAmount: number; // flow-line displacement
+  generativeStyleInvert: boolean; // invert render-style ink
+  generativeStyleCenterX: number; // radial centre x (uv)
+  generativeStyleCenterY: number; // radial centre y (uv)
   generativeAnimate: boolean;
   generativeMotion: number; // 1 drift,2 pulse,3 hue-cycle,4 swirl
   generativeSpeed: number;
@@ -257,6 +260,9 @@ const defaultState = {
   generativeRenderStyle: 0,
   generativeStyleDensity: 50,
   generativeStyleAmount: 1.0,
+  generativeStyleInvert: false,
+  generativeStyleCenterX: 0.5,
+  generativeStyleCenterY: 0.5,
   generativeAnimate: false,
   generativeMotion: 1, // Drift
   generativeSpeed: 0.5,
@@ -469,6 +475,9 @@ export const useDitherStore = create<DitherState>((set) => ({
     generativeRenderStyle: state.generativeRenderStyle,
     generativeStyleDensity: state.generativeStyleDensity,
     generativeStyleAmount: state.generativeStyleAmount,
+    generativeStyleInvert: state.generativeStyleInvert,
+    generativeStyleCenterX: state.generativeStyleCenterX,
+    generativeStyleCenterY: state.generativeStyleCenterY,
     generativeAnimate: state.generativeAnimate,
     generativeMotion: state.generativeMotion,
     generativeSpeed: state.generativeSpeed,

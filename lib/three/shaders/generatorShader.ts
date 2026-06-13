@@ -38,6 +38,8 @@ export const generatorShader = `
     uniform int   uRenderStyle;   // 0 fill,1 dot halftone,2 flow lines,3 hatch,4 radial burst
     uniform float uStyleDensity;  // dots/lines per unit
     uniform float uStyleAmount;   // flow-line displacement amount
+    uniform float uStyleInvert;   // 0/1 invert render-style ink (white-on-black)
+    uniform vec2  uStyleCenter;   // radial-burst centre (uv)
 
     uniform int   uMotion;        // 1 drift,2 pulse,3 hue,4 swirl,5 zoom,6 strobe
     uniform float uSpeed;         // animation speed
@@ -178,7 +180,7 @@ export const generatorShader = `
             float line = aaBand(abs(fract(hp.x + hp.y) - 0.5), 0.12);
             return line * smoothstep(0.1, 0.9, field);
         } else if (uRenderStyle == 4) {          // radial burst — rays from centre
-            vec2 c = (uvp - 0.5) * asp;
+            vec2 c = (uvp - uStyleCenter) * asp;
             float ang = atan(c.y, c.x) / 6.2831853 + 0.5;
             float ray = aaBand(abs(fract(ang * d) - 0.5), 0.12);
             return ray * smoothstep(0.0, 0.3, length(c)) * (0.35 + 0.65 * field);
@@ -663,7 +665,8 @@ export const generatorShader = `
         // Render Style: redraw the field as dots / flow lines / hatch / radial.
         if (uRenderStyle > 0) {
             float field = haveColor ? dot(color, vec3(0.299, 0.587, 0.114)) : val;
-            color = samplePalette(renderStyle(field, vUv, asp));
+            float cov = renderStyle(field, vUv, asp);
+            color = samplePalette(mix(cov, 1.0 - cov, uStyleInvert));
         }
 
         if (uMotion == 3) color = hueRotate(color, t / 6.2831853); // hue cycle (loops at t = 2pi)
