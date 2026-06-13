@@ -34,6 +34,7 @@ export const generatorShader = `
     uniform float uGrain;         // film grain on top
     uniform float uContrast;      // contrast around midpoint
     uniform float uBlend;         // 0 = smooth stops, 1 = hard steps
+    uniform float uLineWeight;    // geometric line thickness multiplier (1 = ~original)
 
     uniform int   uMotion;        // 1 drift,2 pulse,3 hue,4 swirl,5 zoom,6 strobe
     uniform float uSpeed;         // animation speed
@@ -140,6 +141,16 @@ export const generatorShader = `
         p -= 2.0 * min(dot(k.xy, p), 0.0) * k.xy;
         p -= vec2(clamp(p.x, -k.z * r, k.z * r), r);
         return length(p) * sign(p.y);
+    }
+
+    // Anti-aliased line/band: coverage for distance d to a line of half-width hw,
+    // feathered over ~1 screen pixel via fwidth so lines stay crisp at ANY zoom or
+    // export resolution (replaces fixed-width smoothstep that aliased). uLineWeight
+    // scales thickness. Requires derivatives (enabled on the material).
+    float aaBand(float d, float hw) {
+        float aa = fwidth(d) + 1e-6;
+        float w = hw * uLineWeight;
+        return 1.0 - smoothstep(w - aa, w + aa, d);
     }
 
     // ---------- colour helpers ----------
@@ -383,7 +394,7 @@ export const generatorShader = `
             vec2 f = fract(gp);
             if (hash21(cell + uSeed) > 0.5) f.x = 1.0 - f.x;
             float d = min(abs(distance(f, vec2(0.0)) - 0.5), abs(distance(f, vec2(1.0)) - 0.5));
-            val = smoothstep(0.18, 0.0, d);
+            val = aaBand(d, 0.09);
         } else if (uPattern == 13) {    // voronoi shards (flat per-cell)
             val = voronoiCell(puv * (4.0 * uScale) + uSeed, t);
         } else if (uPattern == 14) {    // spiral
@@ -394,15 +405,15 @@ export const generatorShader = `
         } else if (uPattern == 15) {    // technical grid / graph paper (minor + major)
             vec2 p = puv * (8.0 * uScale);
             vec2 g = abs(fract(p) - 0.5);
-            float minor = 1.0 - smoothstep(0.0, 0.04, min(g.x, g.y));
+            float minor = aaBand(min(g.x, g.y), 0.02);
             vec2 gm = abs(fract(p * 0.25) - 0.5);
-            float major = 1.0 - smoothstep(0.0, 0.02, min(gm.x, gm.y));
+            float major = aaBand(min(gm.x, gm.y), 0.012);
             val = clamp(minor * 0.5 + major, 0.0, 1.0);
         } else if (uPattern == 16) {    // isometric line grid (3 axes)
             vec2 p = ccuv * (8.0 * uScale);
-            float l = 1.0 - smoothstep(0.0, 0.05, abs(fract(p.y) - 0.5));
-            l = max(l, 1.0 - smoothstep(0.0, 0.05, abs(fract(p.x * 0.8660254 + p.y * 0.5) - 0.5)));
-            l = max(l, 1.0 - smoothstep(0.0, 0.05, abs(fract(p.x * 0.8660254 - p.y * 0.5) - 0.5)));
+            float l = aaBand(abs(fract(p.y) - 0.5), 0.025);
+            l = max(l, aaBand(abs(fract(p.x * 0.8660254 + p.y * 0.5) - 0.5), 0.025));
+            l = max(l, aaBand(abs(fract(p.x * 0.8660254 - p.y * 0.5) - 0.5), 0.025));
             val = l;
         } else if (uPattern == 17) {    // hexagonal grid (honeycomb outlines)
             vec2 hp = ccuv * (6.0 * uScale);
@@ -410,7 +421,7 @@ export const generatorShader = `
             vec2 ha = mod(hp, rr) - rr * 0.5;
             vec2 hb = mod(hp - rr * 0.5, rr) - rr * 0.5;
             vec2 gv = dot(ha, ha) < dot(hb, hb) ? ha : hb;
-            val = 1.0 - smoothstep(0.0, 0.05, abs(sdHexagon(gv.yx, 0.5)));
+            val = aaBand(abs(sdHexagon(gv.yx, 0.5)), 0.025);
         } else if (uPattern == 18) {    // concentric polygons (nested hexagon rings)
             float sides = 6.0;
             float ang = atan(ccuv.y, ccuv.x);
@@ -425,8 +436,8 @@ export const generatorShader = `
             vec2 f = fract(gp) - 0.5;
             float lw = 0.09;
             float d = (hash21(id + uSeed) < 0.5) ? abs(f.y) : abs(f.x);
-            float trace = 1.0 - smoothstep(0.0, lw, d);
-            float node = (1.0 - smoothstep(lw * 1.3, lw * 1.7, length(f))) * step(0.72, hash21(id + 3.3));
+            float trace = aaBand(d, lw * 0.5);
+            float node = aaBand(length(f), lw * 0.75) * step(0.72, hash21(id + 3.3));
             val = max(trace, node);
         } else if (uPattern == 20) {    // perspective floor grid
             float fy = abs(puv.y - 0.5) + 0.03;
@@ -434,14 +445,14 @@ export const generatorShader = `
             float hl = abs(fract(depth * (6.0 * uScale)) - 0.5);
             float vx = (puv.x - 0.5) * depth;
             float vl = abs(fract(vx * (10.0 * uScale)) - 0.5);
-            float lines = max(1.0 - smoothstep(0.0, 0.06, hl), 1.0 - smoothstep(0.0, 0.06, vl));
+            float lines = max(aaBand(hl, 0.03), aaBand(vl, 0.03));
             val = lines * smoothstep(0.0, 0.12, fy - 0.03);
         } else if (uPattern == 21) {    // crosshatch / engraving
             vec2 p = ccuv * (14.0 * uScale);
             vec2 e1 = vec2(cos(angRad), sin(angRad));
             vec2 e2 = vec2(cos(angRad + 1.5708), sin(angRad + 1.5708));
-            float h1 = 1.0 - smoothstep(0.0, 0.06, abs(fract(dot(p, e1)) - 0.5));
-            float h2 = 1.0 - smoothstep(0.0, 0.06, abs(fract(dot(p, e2)) - 0.5));
+            float h1 = aaBand(abs(fract(dot(p, e1)) - 0.5), 0.03);
+            float h2 = aaBand(abs(fract(dot(p, e2)) - 0.5), 0.03);
             val = max(h1, h2);
         } else if (uPattern == 22) {    // quasicrystal (rotated grating interference)
             float q = 0.0;
@@ -562,6 +573,49 @@ export const generatorShader = `
                 if (tt > 6.0) break;
             }
             val = clamp(hit * 0.35 + (1.0 - st / 48.0) * 0.85, 0.0, 1.0);
+        } else if (uPattern == 34) {    // triangle tessellation (flat mosaic)
+            vec2 p = puv * (5.0 * uScale);
+            vec2 id = floor(p);
+            vec2 gv = fract(p);
+            float upper = step(1.0 - gv.x, gv.y); // diagonal split -> two triangles
+            val = hash21(id + upper * 0.37 + uSeed);
+        } else if (uPattern == 35) {    // nested-square subdivision (Mondrian / quadtree)
+            vec2 p = puv * max(uScale, 0.4);
+            float s = 1.0;
+            for (int i = 0; i < 6; i++) {
+                vec2 cid = floor(p * s);
+                if (hash21(cid + float(i) * 13.1 + uSeed) > 0.62) s *= 2.0; else break;
+            }
+            vec2 cu = fract(p * s);
+            vec2 id = floor(p * s);
+            float fill = hash21(id + s * 0.13 + uSeed);
+            float edge = min(min(cu.x, 1.0 - cu.x), min(cu.y, 1.0 - cu.y));
+            val = mix(fill, 0.0, aaBand(edge, 0.02)); // flat cells, dark borders
+        } else if (uPattern == 36) {    // flower of life (interlocking circles)
+            vec2 p = ccuv * (4.0 * uScale);
+            float c1 = aaBand(abs(length(fract(p) - 0.5) - 0.5), 0.025);
+            float c2 = aaBand(abs(length(fract(p + 0.5) - 0.5) - 0.5), 0.025);
+            val = max(c1, c2);
+        } else if (uPattern == 37) {    // chevron / zigzag bands
+            vec2 p = puv * (6.0 * uScale);
+            float tri = abs(fract(p.x) - 0.5) * 2.0; // triangle wave
+            val = step(0.5, fract(p.y + tri * 0.5));
+        } else if (uPattern == 38) {    // argyle / diamond lattice
+            vec2 p = puv * (6.0 * uScale);
+            vec2 d = abs(fract(p) - 0.5);
+            float diamond = 1.0 - step(0.5, d.x + d.y);
+            float par = mod(floor(p.x) + floor(p.y), 2.0);
+            float fill = abs(diamond - par);
+            float hatch = aaBand(abs(d.x - d.y), 0.02); // diagonal cross stitch
+            val = clamp(fill * 0.9 + hatch * 0.4, 0.0, 1.0);
+        } else if (uPattern == 39) {    // maze (truchet diagonals)
+            float N = max(2.0, floor(8.0 * uScale));
+            vec2 gp = puv * N;
+            vec2 cell = floor(gp);
+            vec2 f = fract(gp) - 0.5;
+            float h = hash21(cell + uSeed);
+            float d = (h > 0.5) ? abs(f.x - f.y) : abs(f.x + f.y);
+            val = aaBand(d * 0.7071068, 0.06);
         }
 
         if (!haveColor) {

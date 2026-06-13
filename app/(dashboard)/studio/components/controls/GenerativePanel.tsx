@@ -39,6 +39,12 @@ const PATTERNS = [
   { value: 31, label: 'Gyroid (3D)' },
   { value: 32, label: 'Corridor (3D)' },
   { value: 33, label: 'Mandelbulb (3D)' },
+  { value: 34, label: 'Triangle Grid' },
+  { value: 35, label: 'Nested Squares' },
+  { value: 36, label: 'Flower of Life' },
+  { value: 37, label: 'Chevron' },
+  { value: 38, label: 'Argyle' },
+  { value: 39, label: 'Maze' },
 ];
 
 const MOTIONS = [
@@ -84,7 +90,7 @@ const BRAND_PALETTES: { name: string; colors: string[] }[] = [
 // Keys that make up a saved generator look (colours stored separately)
 const GEN_PRESET_KEYS = [
   'generativePattern', 'generativeAngle', 'generativeScale', 'generativeWarp', 'generativeWarpFreq',
-  'generativeGrain', 'generativeContrast', 'generativeBlend', 'generativeAnimate', 'generativeMotion',
+  'generativeGrain', 'generativeContrast', 'generativeBlend', 'generativeLineWeight', 'generativeAnimate', 'generativeMotion',
   'generativeSpeed', 'generativeSeed', 'generativeGridCols', 'generativeGridRows', 'generativeSteps',
   'generativeBPM', 'generativeMirror', 'generativeKaleido', 'generativePolar', 'generativeTileX', 'generativeTileY',
   'generativeVignette', 'generativeBorder', 'generativeBorderColor',
@@ -445,7 +451,7 @@ export default function GenerativePanel() {
   const {
     generativePattern, generativeColors, generativeAngle, generativeScale,
     generativeWarp, generativeWarpFreq, generativeGrain, generativeContrast,
-    generativeBlend, generativeAnimate, generativeMotion, generativeSpeed,
+    generativeBlend, generativeLineWeight, generativeAnimate, generativeMotion, generativeSpeed,
     generativeSeed, generativeGridCols, generativeGridRows, generativeSteps,
     generativeBPM, generativeMirror, generativeKaleido, generativePolar, generativeTileX,
     generativeTileY, generativeVignette, generativeBorder, generativeBorderColor,
@@ -611,6 +617,8 @@ export default function GenerativePanel() {
             onChange={(v) => setGenerativeSetting('generativeContrast', v)} fmt={(v) => v.toFixed(2)} />
           <Slider label="Stop Blend (smooth→steps)" value={generativeBlend} min={0} max={1} step={0.01}
             onChange={(v) => setGenerativeSetting('generativeBlend', v)} fmt={(v) => v.toFixed(2)} />
+          <Slider label="Line Weight (geometric)" value={generativeLineWeight} min={0.25} max={5} step={0.05}
+            onChange={(v) => setGenerativeSetting('generativeLineWeight', v)} fmt={(v) => `${v.toFixed(2)}×`} />
           <Slider label="Bands (posterize)" value={generativeSteps} min={0} max={32} step={1}
             onChange={(v) => setGenerativeSetting('generativeSteps', v)} fmt={(v) => v === 0 ? 'off' : String(Math.round(v))} />
           <Slider label="Grain" value={generativeGrain} min={0} max={0.5} step={0.01}
