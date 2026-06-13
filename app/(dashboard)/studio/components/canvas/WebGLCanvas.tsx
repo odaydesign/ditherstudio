@@ -374,6 +374,9 @@ export default function WebGLCanvas() {
         uContrast: { value: s.generativeContrast },
         uBlend: { value: s.generativeBlend },
         uLineWeight: { value: s.generativeLineWeight },
+        uRenderStyle: { value: s.generativeRenderStyle },
+        uStyleDensity: { value: s.generativeStyleDensity },
+        uStyleAmount: { value: s.generativeStyleAmount },
         uMotion: { value: s.generativeMotion },
         uSpeed: { value: s.generativeSpeed },
         uAnimate: { value: s.generativeAnimate ? 1 : 0 },
@@ -802,6 +805,9 @@ export default function WebGLCanvas() {
     mat.uniforms.uContrast.value = ditherState.generativeContrast;
     mat.uniforms.uBlend.value = ditherState.generativeBlend;
     if (mat.uniforms.uLineWeight) mat.uniforms.uLineWeight.value = ditherState.generativeLineWeight;
+    if (mat.uniforms.uRenderStyle) mat.uniforms.uRenderStyle.value = ditherState.generativeRenderStyle;
+    if (mat.uniforms.uStyleDensity) mat.uniforms.uStyleDensity.value = ditherState.generativeStyleDensity;
+    if (mat.uniforms.uStyleAmount) mat.uniforms.uStyleAmount.value = ditherState.generativeStyleAmount;
     mat.uniforms.uMotion.value = ditherState.generativeMotion;
     mat.uniforms.uSpeed.value = ditherState.generativeSpeed;
     mat.uniforms.uAnimate.value = ditherState.generativeAnimate ? 1 : 0;
@@ -834,6 +840,9 @@ export default function WebGLCanvas() {
     ditherState.generativeContrast,
     ditherState.generativeBlend,
     ditherState.generativeLineWeight,
+    ditherState.generativeRenderStyle,
+    ditherState.generativeStyleDensity,
+    ditherState.generativeStyleAmount,
     ditherState.generativeMotion,
     ditherState.generativeSpeed,
     ditherState.generativeSeed,

@@ -35,6 +35,9 @@ export const generatorShader = `
     uniform float uContrast;      // contrast around midpoint
     uniform float uBlend;         // 0 = smooth stops, 1 = hard steps
     uniform float uLineWeight;    // geometric line thickness multiplier (1 = ~original)
+    uniform int   uRenderStyle;   // 0 fill,1 dot halftone,2 flow lines,3 hatch,4 radial burst
+    uniform float uStyleDensity;  // dots/lines per unit
+    uniform float uStyleAmount;   // flow-line displacement amount
 
     uniform int   uMotion;        // 1 drift,2 pulse,3 hue,4 swirl,5 zoom,6 strobe
     uniform float uSpeed;         // animation speed
@@ -151,6 +154,36 @@ export const generatorShader = `
         float aa = fwidth(d) + 1e-6;
         float w = hw * uLineWeight;
         return 1.0 - smoothstep(w - aa, w + aa, d);
+    }
+
+    // Render Style: re-express a scalar field as geometric primitives. Returns
+    // ink coverage 0..1 (then mapped through the palette + dithered as usual).
+    // This is what turns ANY pattern into halftone dots / flowing lines / hatch.
+    float renderStyle(float field, vec2 uvp, vec2 asp) {
+        field = clamp(field, 0.0, 1.0);
+        float d = max(uStyleDensity, 1.0);
+        if (uRenderStyle == 1) {                 // dot halftone — dot size ∝ field
+            vec2 c = fract(uvp * d * vec2(asp.x, 1.0)) - 0.5;
+            float dd = length(c) * 2.0;          // 0 at cell centre, ~1 at edge
+            float r = sqrt(field) * 0.92;        // area roughly ∝ field
+            float aa = fwidth(dd) + 1e-6;
+            return 1.0 - smoothstep(r - aa, r + aa, dd);
+        } else if (uRenderStyle == 2) {          // flow lines — scanlines bent by field
+            float a = radians(uAngle);
+            float across = dot(uvp - 0.5, vec2(-sin(a), cos(a)));
+            float yy = across * d + field * uStyleAmount * 6.0;
+            return aaBand(abs(fract(yy) - 0.5), 0.08);
+        } else if (uRenderStyle == 3) {          // hatch — diagonal density ∝ field
+            vec2 hp = (uvp - 0.5) * d * vec2(asp.x, 1.0);
+            float line = aaBand(abs(fract(hp.x + hp.y) - 0.5), 0.12);
+            return line * smoothstep(0.1, 0.9, field);
+        } else if (uRenderStyle == 4) {          // radial burst — rays from centre
+            vec2 c = (uvp - 0.5) * asp;
+            float ang = atan(c.y, c.x) / 6.2831853 + 0.5;
+            float ray = aaBand(abs(fract(ang * d) - 0.5), 0.12);
+            return ray * smoothstep(0.0, 0.3, length(c)) * (0.35 + 0.65 * field);
+        }
+        return field;
     }
 
     // ---------- colour helpers ----------
@@ -625,6 +658,12 @@ export const generatorShader = `
             color = samplePalette(val);
         } else if (uMotion == 2) {      // pulse on colour-direct patterns
             color *= (1.0 + sin(t) * 0.12);
+        }
+
+        // Render Style: redraw the field as dots / flow lines / hatch / radial.
+        if (uRenderStyle > 0) {
+            float field = haveColor ? dot(color, vec3(0.299, 0.587, 0.114)) : val;
+            color = samplePalette(renderStyle(field, vUv, asp));
         }
 
         if (uMotion == 3) color = hueRotate(color, t / 6.2831853); // hue cycle (loops at t = 2pi)

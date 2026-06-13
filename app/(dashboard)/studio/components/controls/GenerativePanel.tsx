@@ -90,7 +90,8 @@ const BRAND_PALETTES: { name: string; colors: string[] }[] = [
 // Keys that make up a saved generator look (colours stored separately)
 const GEN_PRESET_KEYS = [
   'generativePattern', 'generativeAngle', 'generativeScale', 'generativeWarp', 'generativeWarpFreq',
-  'generativeGrain', 'generativeContrast', 'generativeBlend', 'generativeLineWeight', 'generativeAnimate', 'generativeMotion',
+  'generativeGrain', 'generativeContrast', 'generativeBlend', 'generativeLineWeight',
+  'generativeRenderStyle', 'generativeStyleDensity', 'generativeStyleAmount', 'generativeAnimate', 'generativeMotion',
   'generativeSpeed', 'generativeSeed', 'generativeGridCols', 'generativeGridRows', 'generativeSteps',
   'generativeBPM', 'generativeMirror', 'generativeKaleido', 'generativePolar', 'generativeTileX', 'generativeTileY',
   'generativeVignette', 'generativeBorder', 'generativeBorderColor',
@@ -451,7 +452,8 @@ export default function GenerativePanel() {
   const {
     generativePattern, generativeColors, generativeAngle, generativeScale,
     generativeWarp, generativeWarpFreq, generativeGrain, generativeContrast,
-    generativeBlend, generativeLineWeight, generativeAnimate, generativeMotion, generativeSpeed,
+    generativeBlend, generativeLineWeight, generativeRenderStyle, generativeStyleDensity, generativeStyleAmount,
+    generativeAnimate, generativeMotion, generativeSpeed,
     generativeSeed, generativeGridCols, generativeGridRows, generativeSteps,
     generativeBPM, generativeMirror, generativeKaleido, generativePolar, generativeTileX,
     generativeTileY, generativeVignette, generativeBorder, generativeBorderColor,
@@ -604,6 +606,28 @@ export default function GenerativePanel() {
           className={selectClass + ' mb-4'}>
           {PATTERNS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
         </select>
+        <div className="mb-4">
+          <label className="text-xs text-[#666] block mb-2">Render Style</label>
+          <select value={generativeRenderStyle}
+            onChange={(e) => setGenerativeSetting('generativeRenderStyle', Number(e.target.value))}
+            className={selectClass}>
+            <option value={0}>Fill</option>
+            <option value={1}>Dots (halftone)</option>
+            <option value={2}>Flow Lines</option>
+            <option value={3}>Hatch</option>
+            <option value={4}>Radial Burst</option>
+          </select>
+        </div>
+        {generativeRenderStyle > 0 && (
+          <div className="space-y-4 mb-4">
+            <Slider label="Style Density" value={generativeStyleDensity} min={5} max={220} step={1}
+              onChange={(v) => setGenerativeSetting('generativeStyleDensity', v)} fmt={(v) => String(Math.round(v))} />
+            {generativeRenderStyle === 2 && (
+              <Slider label="Flow Displacement" value={generativeStyleAmount} min={0} max={3} step={0.05}
+                onChange={(v) => setGenerativeSetting('generativeStyleAmount', v)} fmt={(v) => v.toFixed(2)} />
+            )}
+          </div>
+        )}
         <div className="space-y-4">
           <Slider label="Angle" value={generativeAngle} min={0} max={360} step={1}
             onChange={(v) => setGenerativeSetting('generativeAngle', v)} fmt={(v) => `${Math.round(v)}°`} />
