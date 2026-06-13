@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDitherStore } from '@/store/ditherStore';
 import { extractPalette } from '@/lib/utils/colorExtractor';
+import { Collapsible } from './Collapsible';
 
 const PATTERNS = [
   { value: 0, label: 'Linear Gradient' },
@@ -413,7 +414,6 @@ const GEN_PRESETS: { name: string; apply: () => void }[] = [
 
 const sliderClass =
   "w-full h-[2px] bg-[#d0cdc4] outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#2a2a2a] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-[#2a2a2a] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer";
-const sectionClass = "pb-5 mb-5 border-b border-[#d0cdc4]";
 const selectClass =
   "w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer hover:border-[#2a2a2a]";
 
@@ -560,8 +560,7 @@ export default function GenerativePanel() {
   return (
     <div className="space-y-1">
       {/* GENERATOR PRESETS */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">GENERATOR</h2>
+      <Collapsible title="GENERATOR" defaultOpen={true}>
         <div className="grid grid-cols-2 gap-2 mb-3">
           {GEN_PRESETS.map((p) => (
             <button key={p.name} onClick={p.apply}
@@ -598,11 +597,10 @@ export default function GenerativePanel() {
             ))}
           </div>
         )}
-      </div>
+      </Collapsible>
 
       {/* PATTERN */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">PATTERN</h2>
+      <Collapsible title="PATTERN" defaultOpen={true}>
         <select value={generativePattern}
           onChange={(e) => setGenerativeSetting('generativePattern', Number(e.target.value))}
           className={selectClass + ' mb-4'}>
@@ -672,11 +670,10 @@ export default function GenerativePanel() {
               className="px-2 py-1 text-sm border border-[#d0cdc4] hover:border-[#2a2a2a]" title="Random seed">🎲</button>
           </div>
         </div>
-      </div>
+      </Collapsible>
 
       {/* GRID */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">GRID</h2>
+      <Collapsible title="GRID" defaultOpen={false}>
         <div className="space-y-4">
           <Slider label="Columns" value={generativeGridCols} min={0} max={48} step={1}
             onChange={(v) => setGenerativeSetting('generativeGridCols', v)} fmt={(v) => v === 0 ? 'off' : String(Math.round(v))} />
@@ -684,11 +681,10 @@ export default function GenerativePanel() {
             onChange={(v) => setGenerativeSetting('generativeGridRows', v)} fmt={(v) => v === 0 ? 'off' : String(Math.round(v))} />
         </div>
         <p className="text-[10px] text-[#999] mt-2">0 = off. Coarse columns + fine rows ≈ the grid look. Pairs well with Spectrum.</p>
-      </div>
+      </Collapsible>
 
       {/* SYMMETRY & FRAME */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">SYMMETRY &amp; FRAME</h2>
+      <Collapsible title="SYMMETRY & FRAME" defaultOpen={false}>
         <div className="space-y-4">
           <div>
             <label className="text-xs text-[#666] block mb-2">Mirror</label>
@@ -726,11 +722,10 @@ export default function GenerativePanel() {
               onChange={(v) => setGenerativeSetting('generativeBorderColor', v)} />
           )}
         </div>
-      </div>
+      </Collapsible>
 
       {/* GRADIENT COLORS */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">GRADIENT COLORS</h2>
+      <Collapsible title="GRADIENT COLORS" defaultOpen={false}>
 
         {/* brand palette quick-swatches */}
         <div className="flex flex-wrap gap-1 mb-3">
@@ -768,11 +763,10 @@ export default function GenerativePanel() {
             + ADD STOP
           </button>
         )}
-      </div>
+      </Collapsible>
 
       {/* IMAGE LAYER */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">IMAGE LAYER</h2>
+      <Collapsible title="IMAGE LAYER" defaultOpen={false}>
         <div className="flex gap-2 mb-3">
           <button onClick={() => imageLayerInputRef.current?.click()}
             className="flex-1 p-2 text-[10px] bg-transparent border border-[#d0cdc4] text-[#666] hover:border-[#2a2a2a] hover:text-[#2a2a2a]">
@@ -827,11 +821,10 @@ export default function GenerativePanel() {
         ) : (
           <p className="text-[10px] text-[#999]">Drop in a photo or transparent PNG to mask / blend it with the generator pattern — the whole composite then gets dithered.</p>
         )}
-      </div>
+      </Collapsible>
 
       {/* MOTION */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">MOTION</h2>
+      <Collapsible title="MOTION" defaultOpen={false}>
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-[#666]">Animate</span>
           <input type="checkbox" checked={generativeAnimate}
@@ -859,16 +852,14 @@ export default function GenerativePanel() {
             )}
           </div>
         )}
-      </div>
+      </Collapsible>
 
       {/* TEXT / LOGO OVERLAY */}
-      <div className={sectionClass}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-medium text-[#2a2a2a]">TEXT / LOGO</h2>
-          <input type="checkbox" checked={overlayEnabled}
-            onChange={(e) => setGenerativeSetting('overlayEnabled', e.target.checked)}
-            className="w-4 h-4 cursor-pointer accent-[#2a2a2a]" />
-        </div>
+      <Collapsible title="TEXT / LOGO" defaultOpen={false} accessory={
+        <input type="checkbox" checked={overlayEnabled}
+          onChange={(e) => setGenerativeSetting('overlayEnabled', e.target.checked)}
+          className="w-4 h-4 cursor-pointer accent-[#2a2a2a]" />
+      }>
         {overlayEnabled && (
           <div className="space-y-4">
             <textarea value={overlayText} rows={2}
@@ -900,11 +891,10 @@ export default function GenerativePanel() {
             )}
           </div>
         )}
-      </div>
+      </Collapsible>
 
       {/* OUTPUT SIZE */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">OUTPUT SIZE</h2>
+      <Collapsible title="OUTPUT SIZE" defaultOpen={false}>
         <select value={outputAspect} onChange={(e) => handleAspect(e.target.value)} className={selectClass + ' mb-3'}>
           {ASPECTS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
         </select>
@@ -921,7 +911,7 @@ export default function GenerativePanel() {
           </div>
         )}
         <p className="text-[10px] text-[#999] mt-2">Sets preview size &amp; aspect. Stills &amp; MP4 export at ≥4K of this aspect; GIF exports at this size.</p>
-      </div>
+      </Collapsible>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useDitherStore } from '@/store/ditherStore';
 import { paletteCategories, getPaletteById } from '@/lib/palettes/retroPalettes';
 import { algorithms } from '@/lib/three/algorithms';
 import GenerativePanel from './GenerativePanel';
+import { Collapsible } from './Collapsible';
 
 const PRESET_PALETTES = [
   { name: 'Black & White', dark: '#000000', light: '#FFFFFF' },
@@ -238,8 +239,6 @@ export default function SimplifiedSettings() {
 
   const sliderClass = "w-full h-[2px] bg-[#d0cdc4] outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#2a2a2a] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-[#2a2a2a] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer";
 
-  const sectionClass = "pb-5 mb-5 border-b border-[#d0cdc4]";
-
   return (
     <div className="space-y-1">
       {/* Generative controls (when GENERATE source is active; toggle lives in column 1 /SOURCE) */}
@@ -248,8 +247,7 @@ export default function SimplifiedSettings() {
       {/* ============================================ */}
       {/* SECTION 1: SOURCE IMAGE */}
       {/* ============================================ */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">SOURCE IMAGE</h2>
+      <Collapsible title="SOURCE IMAGE" defaultOpen={false}>
 
         <div className="space-y-4">
           <div>
@@ -365,20 +363,18 @@ export default function SimplifiedSettings() {
             </div>
           )}
         </div>
-      </div>
+      </Collapsible>
 
       {/* ============================================ */}
       {/* SECTION 1.5: ANIMATE EFFECTS (dither / ASCII) */}
-      <div className={sectionClass}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-medium text-[#2a2a2a]">ANIMATE</h2>
-          <input
-            type="checkbox"
-            checked={fxAnimate}
-            onChange={(e) => setGlobalSetting('fxAnimate', e.target.checked)}
-            className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
-          />
-        </div>
+      <Collapsible title="ANIMATE" defaultOpen={false} accessory={
+        <input
+          type="checkbox"
+          checked={fxAnimate}
+          onChange={(e) => setGlobalSetting('fxAnimate', e.target.checked)}
+          className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+        />
+      }>
         {fxAnimate && (
           <div className="space-y-4">
             <select
@@ -405,27 +401,25 @@ export default function SimplifiedSettings() {
             <p className="text-[10px] text-[#999]">Animates the dither &amp; ASCII on any source (incl. uploads). Export a seamless loop via /EXPORT → More options → 🔁.</p>
           </div>
         )}
-      </div>
+      </Collapsible>
 
       {/* SECTION 1.6: ANALOG SIGNAL FX (composite / VHS / CRT artifacts) */}
-      <div className={sectionClass}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-medium text-[#2a2a2a]">ANALOG</h2>
-          {(analogWobble || analogBleed || analogStatic || analogHum || analogGhost) > 0 && (
-            <button
-              onClick={() => {
-                setGlobalSetting('analogWobble', 0);
-                setGlobalSetting('analogBleed', 0);
-                setGlobalSetting('analogStatic', 0);
-                setGlobalSetting('analogHum', 0);
-                setGlobalSetting('analogGhost', 0);
-              }}
-              className="text-[10px] text-[#999] underline hover:text-[#2a2a2a]"
-            >
-              reset
-            </button>
-          )}
-        </div>
+      <Collapsible title="ANALOG" defaultOpen={false} accessory={
+        (analogWobble || analogBleed || analogStatic || analogHum || analogGhost) > 0 ? (
+          <button
+            onClick={() => {
+              setGlobalSetting('analogWobble', 0);
+              setGlobalSetting('analogBleed', 0);
+              setGlobalSetting('analogStatic', 0);
+              setGlobalSetting('analogHum', 0);
+              setGlobalSetting('analogGhost', 0);
+            }}
+            className="text-[10px] text-[#999] underline hover:text-[#2a2a2a]"
+          >
+            reset
+          </button>
+        ) : null
+      }>
         <div className="space-y-4">
           {([
             ['analogWobble', 'Tracking wobble', analogWobble],
@@ -448,12 +442,11 @@ export default function SimplifiedSettings() {
           ))}
           <p className="text-[10px] text-[#999]">Composite/VHS artifacts applied before &amp; after the dither. Wobble, hum, ghost &amp; static animate over time &mdash; enable ANIMATE (or a generative motion) and export as a loop to capture the movement.</p>
         </div>
-      </div>
+      </Collapsible>
 
       {/* SECTION 2: ALGORITHM & DITHERING */}
       {/* ============================================ */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">ALGORITHM & DITHERING</h2>
+      <Collapsible title="ALGORITHM & DITHERING" defaultOpen={true}>
 
         {/* Algorithm Dropdown */}
         <select
@@ -826,12 +819,11 @@ export default function SimplifiedSettings() {
             />
           </div>
         </div>
-      </div>
+      </Collapsible>
       {/* ============================================ */}
       {/* SECTION 3: COLOR PALETTE */}
       {/* ============================================ */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">COLOR PALETTE</h2>
+      <Collapsible title="COLOR PALETTE" defaultOpen={true}>
 
         {/* Retro Presets (Moved here) */}
         <div className="mb-4">
@@ -1030,13 +1022,12 @@ export default function SimplifiedSettings() {
 
         {/* Character Scaling */}
         {/* Character Scaling */}
-      </div>
+      </Collapsible>
 
       {/* ============================================ */}
       {/* SECTION 4: POST-PROCESSING */}
       {/* ============================================ */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">POST-PROCESSING</h2>
+      <Collapsible title="POST-PROCESSING" defaultOpen={false}>
 
         <div className="space-y-4">
           <div>
@@ -1135,12 +1126,11 @@ export default function SimplifiedSettings() {
             />
           </div>
         </div>
-      </div>
+      </Collapsible>
       {/* ============================================ */}
       {/* SECTION 5: DISPLAY EFFECTS */}
       {/* ============================================ */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium mb-4 text-[#2a2a2a]">DISPLAY EFFECTS</h2>
+      <Collapsible title="DISPLAY EFFECTS" defaultOpen={false}>
 
         <div className="space-y-4">
           <div>
@@ -1233,21 +1223,19 @@ export default function SimplifiedSettings() {
             />
           </div>
         </div>
-      </div>
+      </Collapsible>
 
       {/* ============================================ */}
       {/* SECTION 6: VIDEO / WEBCAM */}
       {/* ============================================ */}
-      <div className={sectionClass}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-medium text-[#2a2a2a]">VIDEO / WEBCAM</h2>
-          <button
-            onClick={() => setWebcam(!isWebcam)}
-            className={`text-[10px] px-2 py-1 border ${isWebcam ? 'bg-[#2a2a2a] text-white border-[#2a2a2a]' : 'bg-white text-[#2a2a2a] border-[#d0cdc4]'}`}
-          >
-            {isWebcam ? 'STOP WEBCAM' : 'USE WEBCAM'}
-          </button>
-        </div>
+      <Collapsible title="VIDEO / WEBCAM" defaultOpen={false} accessory={
+        <button
+          onClick={() => setWebcam(!isWebcam)}
+          className={`text-[10px] px-2 py-1 border ${isWebcam ? 'bg-[#2a2a2a] text-white border-[#2a2a2a]' : 'bg-white text-[#2a2a2a] border-[#d0cdc4]'}`}
+        >
+          {isWebcam ? 'STOP WEBCAM' : 'USE WEBCAM'}
+        </button>
+      }>
 
         {(!isVideo && !isWebcam) && (
           <p className="text-[10px] text-[#999] mb-3">Load a video or start webcam to enable these controls</p>
@@ -1370,7 +1358,7 @@ export default function SimplifiedSettings() {
             />
           </div>
         </div>
-      </div>
+      </Collapsible>
     </div >
   );
 }
