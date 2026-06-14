@@ -13,12 +13,12 @@ export default function ColorSettings() {
     // Grayscale Mode (1)
     if (colorMode === 1) {
         return (
-            <div className="mt-4 border-t border-[#d0cdc4] pt-4">
-                <div className="text-xs font-bold text-[#666] mb-2 uppercase tracking-wider">
+            <div className="mt-4 border-t border-white/10 pt-4">
+                <div className="text-xs font-bold text-white/55 mb-2 uppercase tracking-wider">
                     Grayscale Settings
                 </div>
                 <div>
-                    <label className="text-[10px] text-[#999] block mb-1">Tint Color</label>
+                    <label className="text-[10px] text-white/40 block mb-1">Tint Color</label>
                     <div className="flex items-center">
                         <div className="relative w-8 h-8 mr-2">
                             <input
@@ -28,11 +28,11 @@ export default function ColorSettings() {
                                 className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
                             />
                             <div
-                                className="w-full h-full rounded border border-[#d0cdc4] shadow-sm"
+                                className="w-full h-full rounded border border-white/10 rounded-xl shadow-sm"
                                 style={{ backgroundColor: duotoneLight }}
                             />
                         </div>
-                        <span className="text-xs text-[#2a2a2a] font-mono">{duotoneLight}</span>
+                        <span className="text-xs text-white/90 font-mono">{duotoneLight}</span>
                     </div>
                 </div>
             </div>
@@ -42,13 +42,13 @@ export default function ColorSettings() {
     // Duotone Mode (2)
     if (colorMode === 2) {
         return (
-            <div className="mt-4 border-t border-[#d0cdc4] pt-4">
-                <div className="text-xs font-bold text-[#666] mb-2 uppercase tracking-wider">
+            <div className="mt-4 border-t border-white/10 pt-4">
+                <div className="text-xs font-bold text-white/55 mb-2 uppercase tracking-wider">
                     Duotone Colors
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className="text-[10px] text-[#999] block mb-1">Dark</label>
+                        <label className="text-[10px] text-white/40 block mb-1">Dark</label>
                         <div className="flex items-center">
                             <div className="relative w-8 h-8 mr-2">
                                 <input
@@ -58,15 +58,15 @@ export default function ColorSettings() {
                                     className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
                                 />
                                 <div
-                                    className="w-full h-full rounded border border-[#d0cdc4] shadow-sm"
+                                    className="w-full h-full rounded border border-white/10 rounded-xl shadow-sm"
                                     style={{ backgroundColor: duotoneDark }}
                                 />
                             </div>
-                            <span className="text-xs text-[#2a2a2a] font-mono">{duotoneDark}</span>
+                            <span className="text-xs text-white/90 font-mono">{duotoneDark}</span>
                         </div>
                     </div>
                     <div>
-                        <label className="text-[10px] text-[#999] block mb-1">Light</label>
+                        <label className="text-[10px] text-white/40 block mb-1">Light</label>
                         <div className="flex items-center">
                             <div className="relative w-8 h-8 mr-2">
                                 <input
@@ -76,11 +76,11 @@ export default function ColorSettings() {
                                     className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
                                 />
                                 <div
-                                    className="w-full h-full rounded border border-[#d0cdc4] shadow-sm"
+                                    className="w-full h-full rounded border border-white/10 rounded-xl shadow-sm"
                                     style={{ backgroundColor: duotoneLight }}
                                 />
                             </div>
-                            <span className="text-xs text-[#2a2a2a] font-mono">{duotoneLight}</span>
+                            <span className="text-xs text-white/90 font-mono">{duotoneLight}</span>
                         </div>
                     </div>
                 </div>
@@ -91,13 +91,13 @@ export default function ColorSettings() {
     // Tritone Mode (3)
     if (colorMode === 3) {
         return (
-            <div className="mt-4 border-t border-[#d0cdc4] pt-4">
-                <div className="text-xs font-bold text-[#666] mb-2 uppercase tracking-wider">
+            <div className="mt-4 border-t border-white/10 pt-4">
+                <div className="text-xs font-bold text-white/55 mb-2 uppercase tracking-wider">
                     Tritone Colors
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                     <div>
-                        <label className="text-[10px] text-[#999] block mb-1">Shadow</label>
+                        <label className="text-[10px] text-white/40 block mb-1">Shadow</label>
                         <div className="relative w-full h-8">
                             <input
                                 type="color"
@@ -106,13 +106,13 @@ export default function ColorSettings() {
                                 className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
                             />
                             <div
-                                className="w-full h-full rounded border border-[#d0cdc4] shadow-sm"
+                                className="w-full h-full rounded border border-white/10 rounded-xl shadow-sm"
                                 style={{ backgroundColor: tritoneShadow }}
                             />
                         </div>
                     </div>
                     <div>
-                        <label className="text-[10px] text-[#999] block mb-1">Mid</label>
+                        <label className="text-[10px] text-white/40 block mb-1">Mid</label>
                         <div className="relative w-full h-8">
                             <input
                                 type="color"
@@ -121,13 +121,13 @@ export default function ColorSettings() {
                                 className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
                             />
                             <div
-                                className="w-full h-full rounded border border-[#d0cdc4] shadow-sm"
+                                className="w-full h-full rounded border border-white/10 rounded-xl shadow-sm"
                                 style={{ backgroundColor: tritoneMid }}
                             />
                         </div>
                     </div>
                     <div>
-                        <label className="text-[10px] text-[#999] block mb-1">Highlight</label>
+                        <label className="text-[10px] text-white/40 block mb-1">Highlight</label>
                         <div className="relative w-full h-8">
                             <input
                                 type="color"
@@ -136,7 +136,7 @@ export default function ColorSettings() {
                                 className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
                             />
                             <div
-                                className="w-full h-full rounded border border-[#d0cdc4] shadow-sm"
+                                className="w-full h-full rounded border border-white/10 rounded-xl shadow-sm"
                                 style={{ backgroundColor: tritoneHighlight }}
                             />
                         </div>
@@ -150,8 +150,8 @@ export default function ColorSettings() {
     if (colorMode === 4 || colorMode === 5) {
         return (
             <>
-                <div className="mt-4 border-t border-[#d0cdc4] pt-4 mb-4">
-                    <div className="text-xs font-bold text-[#666] mb-2 uppercase tracking-wider">
+                <div className="mt-4 border-t border-white/10 pt-4 mb-4">
+                    <div className="text-xs font-bold text-white/55 mb-2 uppercase tracking-wider">
                         Palette Presets
                     </div>
                     <select
@@ -169,7 +169,7 @@ export default function ColorSettings() {
                                 useDitherStore.getState().setCustomPalette(hexColors);
                             }
                         }}
-                        className="w-full bg-transparent border border-[#d0cdc4] p-2 text-[#2a2a2a] font-['JetBrains_Mono',monospace] text-sm outline-none cursor-pointer"
+                        className="w-full bg-transparent border border-white/10 rounded-xl p-2 text-white/90 font-sans text-sm outline-none cursor-pointer"
                     >
                         <option value="">Select a preset...</option>
                         {getPaletteNames().map((name) => (

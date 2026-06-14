@@ -19,14 +19,14 @@ export function Collapsible({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="pb-5 mb-5 border-b border-[#d0cdc4]">
+    <div className="pb-5 mb-5 border-b border-white/10">
       <div className="flex items-center justify-between mb-4">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-2 text-sm font-medium text-[#2a2a2a] cursor-pointer select-none bg-transparent p-0 border-0"
+          className="flex items-center gap-2 text-sm font-medium text-white/90 cursor-pointer select-none bg-transparent p-0 border-0"
         >
-          <span className="text-[10px] text-[#999] w-2.5 inline-block text-center">{open ? '▾' : '▸'}</span>
+          <span className="text-[10px] text-white/40 w-2.5 inline-block text-center">{open ? '▾' : '▸'}</span>
           {title}
         </button>
         {accessory ? <div className="flex items-center">{accessory}</div> : null}

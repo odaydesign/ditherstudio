@@ -4,9 +4,6 @@ import { useEffect, useState } from 'react';
 import { useDitherStore } from '@/store/ditherStore';
 import { paletteCategories, getPaletteById } from '@/lib/palettes/retroPalettes';
 import { algorithms } from '@/lib/three/algorithms';
-import GenerativePanel from './GenerativePanel';
-import Object3DPanel from './Object3DPanel';
-import WaveFieldPanel from './WaveFieldPanel';
 import { Collapsible } from './Collapsible';
 
 const PRESET_PALETTES = [
@@ -189,10 +186,6 @@ export default function SimplifiedSettings() {
     halftoneRotation,
     halftoneSpread,
     setHalftoneSetting,
-    // Generative source (toggle lives in column 1 /SOURCE)
-    isGenerative,
-    is3D,
-    isWaveField,
   } = useDitherStore();
 
   const [selectedRetroPreset, setSelectedRetroPreset] = useState<string | null>(null);
@@ -241,14 +234,11 @@ export default function SimplifiedSettings() {
     setColorMode(2);
   }, [setAlgorithm, setColorMode]);
 
-  const sliderClass = "w-full h-[2px] bg-[#d0cdc4] outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#2a2a2a] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-[#2a2a2a] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer";
+  const sliderClass = "w-full h-[2px] bg-white/20 outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer";
 
   return (
     <div className="space-y-1">
-      {/* Generative controls (when GENERATE source is active; toggle lives in column 1 /SOURCE) */}
-      {isGenerative && <GenerativePanel />}
-      {is3D && <Object3DPanel />}
-      {isWaveField && <WaveFieldPanel />}
+      {/* Source-specific creative panels now live in the left "Source" panel. */}
 
       {/* ============================================ */}
       {/* SECTION 1: SOURCE IMAGE */}
@@ -258,8 +248,8 @@ export default function SimplifiedSettings() {
         <div className="space-y-4">
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Brightness</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{brightness.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Brightness</label>
+              <span className="text-xs text-white/90 font-mono">{brightness.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -274,8 +264,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Contrast</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{contrast.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Contrast</label>
+              <span className="text-xs text-white/90 font-mono">{contrast.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -290,8 +280,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Saturation</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{saturation.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Saturation</label>
+              <span className="text-xs text-white/90 font-mono">{saturation.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -306,8 +296,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Hue Shift</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{hueShift.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Hue Shift</label>
+              <span className="text-xs text-white/90 font-mono">{hueShift.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -321,32 +311,32 @@ export default function SimplifiedSettings() {
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[#666]">Gamma Correction</span>
+            <span className="text-xs text-white/55">Gamma Correction</span>
             <input
               type="checkbox"
               checked={gammaCorrect}
               onChange={(e) => setGlobalSetting('gammaCorrect', e.target.checked)}
-              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+              className="w-4 h-4 cursor-pointer accent-white"
             />
           </div>
 
-          <div className="flex items-center justify-between border-t border-[#d0cdc4] pt-2 mt-2">
-            <span className="text-xs text-[#666] font-medium">Split-View Comparison</span>
+          <div className="flex items-center justify-between border-t border-white/10 pt-2 mt-2">
+            <span className="text-xs text-white/55 font-medium">Split-View Comparison</span>
             <input
               type="checkbox"
               checked={comparisonMode}
               onChange={(e) => setGlobalSetting('comparisonMode', e.target.checked)}
-              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+              className="w-4 h-4 cursor-pointer accent-white"
             />
           </div>
 
-          <div className="flex items-center justify-between border-t border-[#d0cdc4] pt-2">
-            <span className="text-xs text-[#666] font-medium">Grid Comparison (4-way)</span>
+          <div className="flex items-center justify-between border-t border-white/10 pt-2">
+            <span className="text-xs text-white/55 font-medium">Grid Comparison (4-way)</span>
             <input
               type="checkbox"
               checked={gridMode}
               onChange={(e) => setGlobalSetting('gridMode', e.target.checked)}
-              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+              className="w-4 h-4 cursor-pointer accent-white"
             />
           </div>
           
@@ -361,7 +351,7 @@ export default function SimplifiedSettings() {
                     newAlgos[i] = Number(e.target.value);
                     setGlobalSetting('gridAlgorithms', newAlgos);
                   }}
-                  className="w-full p-1 bg-[#f5f3ee] border border-[#d0cdc4] text-[9px] font-mono"
+                  className="w-full p-1 bg-white/[0.045] border border-white/10 rounded-xl text-[9px] font-mono"
                 >
                   {algorithms.map(a => <option key={a.id} value={a.shaderValue}>{a.name.split('(')[0]}</option>)}
                 </select>
@@ -378,7 +368,7 @@ export default function SimplifiedSettings() {
           type="checkbox"
           checked={fxAnimate}
           onChange={(e) => setGlobalSetting('fxAnimate', e.target.checked)}
-          className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+          className="w-4 h-4 cursor-pointer accent-white"
         />
       }>
         {fxAnimate && (
@@ -386,7 +376,7 @@ export default function SimplifiedSettings() {
             <select
               value={fxMotion}
               onChange={(e) => setGlobalSetting('fxMotion', Number(e.target.value))}
-              className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer"
+              className="w-full p-2 bg-white/[0.05] border border-white/10 rounded-xl text-xs text-white/90 font-sans cursor-pointer"
             >
               <option value={1}>Drift</option>
               <option value={2}>Zoom</option>
@@ -395,8 +385,8 @@ export default function SimplifiedSettings() {
             </select>
             <div>
               <div className="flex justify-between mb-2">
-                <label className="text-xs text-[#666]">Speed</label>
-                <span className="text-xs text-[#2a2a2a] font-mono">{fxSpeed.toFixed(2)}</span>
+                <label className="text-xs text-white/55">Speed</label>
+                <span className="text-xs text-white/90 font-mono">{fxSpeed.toFixed(2)}</span>
               </div>
               <input
                 type="range" min="0.05" max="3" step="0.05" value={fxSpeed}
@@ -404,7 +394,7 @@ export default function SimplifiedSettings() {
                 className={sliderClass}
               />
             </div>
-            <p className="text-[10px] text-[#999]">Animates the dither &amp; ASCII on any source (incl. uploads). Export a seamless loop via /EXPORT → More options → 🔁.</p>
+            <p className="text-[10px] text-white/40">Animates the dither &amp; ASCII on any source (incl. uploads). Export a seamless loop via /EXPORT → More options → 🔁.</p>
           </div>
         )}
       </Collapsible>
@@ -420,7 +410,7 @@ export default function SimplifiedSettings() {
               setGlobalSetting('analogHum', 0);
               setGlobalSetting('analogGhost', 0);
             }}
-            className="text-[10px] text-[#999] underline hover:text-[#2a2a2a]"
+            className="text-[10px] text-white/40 underline hover:text-white/90"
           >
             reset
           </button>
@@ -436,8 +426,8 @@ export default function SimplifiedSettings() {
           ] as [string, string, number][]).map(([key, label, val]) => (
             <div key={key}>
               <div className="flex justify-between mb-2">
-                <label className="text-xs text-[#666]">{label}</label>
-                <span className="text-xs text-[#2a2a2a] font-mono">{val.toFixed(2)}</span>
+                <label className="text-xs text-white/55">{label}</label>
+                <span className="text-xs text-white/90 font-mono">{val.toFixed(2)}</span>
               </div>
               <input
                 type="range" min="0" max="1" step="0.01" value={val}
@@ -446,7 +436,7 @@ export default function SimplifiedSettings() {
               />
             </div>
           ))}
-          <p className="text-[10px] text-[#999]">Composite/VHS artifacts applied before &amp; after the dither. Wobble, hum, ghost &amp; static animate over time &mdash; enable ANIMATE (or a generative motion) and export as a loop to capture the movement.</p>
+          <p className="text-[10px] text-white/40">Composite/VHS artifacts applied before &amp; after the dither. Wobble, hum, ghost &amp; static animate over time &mdash; enable ANIMATE (or a generative motion) and export as a loop to capture the movement.</p>
         </div>
       </Collapsible>
 
@@ -458,7 +448,7 @@ export default function SimplifiedSettings() {
         <select
           value={algorithm}
           onChange={(e) => handleAlgorithmChange(Number(e.target.value))}
-          className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer hover:border-[#2a2a2a] mb-2"
+          className="w-full p-2 bg-white/[0.05] border border-white/10 rounded-xl text-xs text-white/90 font-sans cursor-pointer hover:border-white/40 mb-2"
         >
           {sortedCategories.map(([category, algoIds]) => (
             <optgroup key={category} label={category}>
@@ -476,7 +466,7 @@ export default function SimplifiedSettings() {
         </select>
 
         {currentAlgorithm && (
-          <div className="text-[10px] text-[#999] mb-3">{currentAlgorithm.category}</div>
+          <div className="text-[10px] text-white/40 mb-3">{currentAlgorithm.category}</div>
         )}
 
         {/* Algorithm-specific parameters */}
@@ -485,8 +475,8 @@ export default function SimplifiedSettings() {
             {Object.entries(currentAlgorithm.params).map(([key, param]) => (
               <div key={key}>
                 <div className="flex justify-between mb-2">
-                  <label className="text-xs text-[#666]">{param.label}</label>
-                  <span className="text-xs text-[#2a2a2a] font-mono">
+                  <label className="text-xs text-white/55">{param.label}</label>
+                  <span className="text-xs text-white/90 font-mono">
                     {param.uniformIndex === 1 ? param1.toFixed(2) : param2.toFixed(2)}
                   </span>
                 </div>
@@ -494,7 +484,7 @@ export default function SimplifiedSettings() {
                   <select
                     value={param.uniformIndex === 1 ? param1 : param2}
                     onChange={(e) => setParam(param.uniformIndex || 1, Number(e.target.value))}
-                    className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer"
+                    className="w-full p-2 bg-white/[0.05] border border-white/10 rounded-xl text-xs text-white/90 font-sans cursor-pointer"
                   >
                     {(param.options as number[]).map(opt => (
                       <option key={opt} value={opt}>{opt}</option>
@@ -518,15 +508,15 @@ export default function SimplifiedSettings() {
 
         {/* ASCII / SHAPE SPECIFIC CONTROLS */}
         {algorithm === 2 && (
-          <div className="space-y-4 mb-4 border-t border-[#d0cdc4] pt-4">
+          <div className="space-y-4 mb-4 border-t border-white/10 pt-4">
 
             {/* Mode Selection */}
             <div>
-              <label className="block text-xs text-[#666] mb-2">Effect Mode</label>
+              <label className="block text-xs text-white/55 mb-2">Effect Mode</label>
               <select
                 value={asciiMode}
                 onChange={(e) => setAsciiSetting('asciiMode', Number(e.target.value))}
-                className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer"
+                className="w-full p-2 bg-white/[0.05] border border-white/10 rounded-xl text-xs text-white/90 font-sans cursor-pointer"
               >
                 {ASCII_MODES.map(m => (
                   <option key={m.value} value={m.value}>{m.label}</option>
@@ -536,11 +526,11 @@ export default function SimplifiedSettings() {
 
             {/* Shape Selection */}
             <div>
-              <label className="block text-xs text-[#666] mb-2">Shape</label>
+              <label className="block text-xs text-white/55 mb-2">Shape</label>
               <select
                 value={asciiShape}
                 onChange={(e) => setAsciiSetting('asciiShape', Number(e.target.value))}
-                className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer"
+                className="w-full p-2 bg-white/[0.05] border border-white/10 rounded-xl text-xs text-white/90 font-sans cursor-pointer"
               >
                 {ASCII_SHAPES.map(s => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -549,7 +539,7 @@ export default function SimplifiedSettings() {
 
               {asciiShape === 30 && (
                 <div className="mt-2">
-                  <label className="block text-xs text-[#666] mb-1">Upload Shape (SVG/PNG)</label>
+                  <label className="block text-xs text-white/55 mb-1">Upload Shape (SVG/PNG)</label>
                   <input
                     type="file"
                     accept="image/*,.svg"
@@ -565,7 +555,7 @@ export default function SimplifiedSettings() {
                         reader.readAsDataURL(file);
                       }
                     }}
-                    className="w-full text-[10px] text-[#666] file:mr-2 file:py-1 file:px-2 file:border-0 file:text-xs file:bg-[#2a2a2a] file:text-white hover:file:bg-[#444] cursor-pointer"
+                    className="w-full text-[10px] text-white/55 file:mr-2 file:py-1 file:px-2 file:border-0 file:text-xs file:bg-white/10 file:text-white hover:file:bg-white/20 cursor-pointer"
                   />
                   {customShapeTexture && (
                     <div className="mt-1 text-[9px] text-green-600 flex items-center">
@@ -578,16 +568,16 @@ export default function SimplifiedSettings() {
 
               {asciiShape === 31 && (
                 <div className="mt-2">
-                  <label className="block text-xs text-[#666] mb-1">Characters (first = darkest)</label>
+                  <label className="block text-xs text-white/55 mb-1">Characters (first = darkest)</label>
                   <input
                     type="text"
                     value={asciiCharacters}
                     onChange={(e) => setAsciiSetting('asciiCharacters', e.target.value)}
                     placeholder="@%#*+=-:. "
                     spellCheck={false}
-                    className="w-full p-2 bg-white border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] focus:outline-none focus:border-[#2a2a2a]"
+                    className="w-full p-2 bg-white/[0.06] border border-white/10 rounded-xl text-xs text-white/90 font-sans focus:outline-none focus:border-white/40"
                   />
-                  <p className="text-[9px] text-[#999] mt-1">Ordered dark → light. Trailing space keeps highlights blank. Try &quot;01&quot; or &quot;DITHER&quot;.</p>
+                  <p className="text-[9px] text-white/40 mt-1">Ordered dark → light. Trailing space keeps highlights blank. Try &quot;01&quot; or &quot;DITHER&quot;.</p>
                 </div>
               )}
             </div>
@@ -595,8 +585,8 @@ export default function SimplifiedSettings() {
             {/* Cell Size */}
             <div>
               <div className="flex justify-between mb-2">
-                <label className="text-xs text-[#666]">Cell Size</label>
-                <span className="text-xs text-[#2a2a2a] font-mono">{asciiCellSize}px</span>
+                <label className="text-xs text-white/55">Cell Size</label>
+                <span className="text-xs text-white/90 font-mono">{asciiCellSize}px</span>
               </div>
               <input
                 type="range"
@@ -612,8 +602,8 @@ export default function SimplifiedSettings() {
             {/* Base Scale */}
             <div>
               <div className="flex justify-between mb-2">
-                <label className="text-xs text-[#666]">Shape Scale</label>
-                <span className="text-xs text-[#2a2a2a] font-mono">{asciiBaseScale.toFixed(2)}</span>
+                <label className="text-xs text-white/55">Shape Scale</label>
+                <span className="text-xs text-white/90 font-mono">{asciiBaseScale.toFixed(2)}</span>
               </div>
               <input
                 type="range"
@@ -629,8 +619,8 @@ export default function SimplifiedSettings() {
             {/* Gap */}
             <div>
               <div className="flex justify-between mb-2">
-                <label className="text-xs text-[#666]">Gap</label>
-                <span className="text-xs text-[#2a2a2a] font-mono">{asciiGap.toFixed(2)}</span>
+                <label className="text-xs text-white/55">Gap</label>
+                <span className="text-xs text-white/90 font-mono">{asciiGap.toFixed(2)}</span>
               </div>
               <input
                 type="range"
@@ -646,8 +636,8 @@ export default function SimplifiedSettings() {
             {/* Intensity */}
             <div>
               <div className="flex justify-between mb-2">
-                <label className="text-xs text-[#666]">Intensity</label>
-                <span className="text-xs text-[#2a2a2a] font-mono">{asciiIntensity.toFixed(1)}</span>
+                <label className="text-xs text-white/55">Intensity</label>
+                <span className="text-xs text-white/90 font-mono">{asciiIntensity.toFixed(1)}</span>
               </div>
               <input
                 type="range"
@@ -663,7 +653,7 @@ export default function SimplifiedSettings() {
             {/* Colors */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-[#666] mb-2">Shape Color</label>
+                <label className="block text-xs text-white/55 mb-2">Shape Color</label>
                 <div className="relative">
                   <input
                     type="color"
@@ -671,11 +661,11 @@ export default function SimplifiedSettings() {
                     onChange={(e) => setAsciiSetting('asciiFgColor', e.target.value)}
                     className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
                   />
-                  <div className="w-full h-8 border border-[#d0cdc4]" style={{ backgroundColor: asciiFgColor }} />
+                  <div className="w-full h-8 border border-white/10 rounded-xl" style={{ backgroundColor: asciiFgColor }} />
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-[#666] mb-2">Background</label>
+                <label className="block text-xs text-white/55 mb-2">Background</label>
                 <div className="relative">
                   <input
                     type="color"
@@ -683,28 +673,28 @@ export default function SimplifiedSettings() {
                     onChange={(e) => setAsciiSetting('asciiBgColor', e.target.value)}
                     className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
                   />
-                  <div className="w-full h-8 border border-[#d0cdc4]" style={{ backgroundColor: asciiBgColor }} />
+                  <div className="w-full h-8 border border-white/10 rounded-xl" style={{ backgroundColor: asciiBgColor }} />
                 </div>
               </div>
             </div>
 
             <div className="flex items-center justify-between">
-              <label className="text-xs text-[#666]">Use Image Colors</label>
+              <label className="text-xs text-white/55">Use Image Colors</label>
               <input
                 type="checkbox"
                 checked={asciiUseColor}
                 onChange={(e) => setAsciiSetting('asciiUseColor', e.target.checked)}
-                className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+                className="w-4 h-4 cursor-pointer accent-white"
               />
             </div>
 
             <div className="flex items-center justify-between">
-              <label className="text-xs text-[#666]">Invert Luma</label>
+              <label className="text-xs text-white/55">Invert Luma</label>
               <input
                 type="checkbox"
                 checked={asciiInvert}
                 onChange={(e) => setAsciiSetting('asciiInvert', e.target.checked)}
-                className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+                className="w-4 h-4 cursor-pointer accent-white"
               />
             </div>
 
@@ -716,8 +706,8 @@ export default function SimplifiedSettings() {
           {/* Dot Size (Scale) */}
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Dot Size</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{scale.toFixed(1)}x</span>
+              <label className="text-xs text-white/55">Dot Size</label>
+              <span className="text-xs text-white/90 font-mono">{scale.toFixed(1)}x</span>
             </div>
             <input
               type="range"
@@ -733,8 +723,8 @@ export default function SimplifiedSettings() {
           {/* Dither Strength (Detail) */}
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Dither Strength</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{ditherStrength.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Dither Strength</label>
+              <span className="text-xs text-white/90 font-mono">{ditherStrength.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -747,21 +737,21 @@ export default function SimplifiedSettings() {
             />
           </div>
 
-          <div className="pt-2 mt-2 border-t border-[#d0cdc4]">
+          <div className="pt-2 mt-2 border-t border-white/10">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] text-[#666] font-bold uppercase tracking-wider">Adaptive Threshold</span>
+              <span className="text-[10px] text-white/55 font-bold uppercase tracking-wider">Adaptive Threshold</span>
               <input
                 type="checkbox"
                 checked={adaptiveThreshold}
                 onChange={(e) => setGlobalSetting('adaptiveThreshold', e.target.checked)}
-                className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+                className="w-4 h-4 cursor-pointer accent-white"
               />
             </div>
             {adaptiveThreshold && (
               <div className="mb-4">
                 <div className="flex justify-between mb-2">
-                  <label className="text-xs text-[#666]">Window Size</label>
-                  <span className="text-xs text-[#2a2a2a] font-mono">{adaptiveWindow}px</span>
+                  <label className="text-xs text-white/55">Window Size</label>
+                  <span className="text-xs text-white/90 font-mono">{adaptiveWindow}px</span>
                 </div>
                 <input
                   type="range"
@@ -778,8 +768,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Pattern Jitter</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{patternRandomization.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Pattern Jitter</label>
+              <span className="text-xs text-white/90 font-mono">{patternRandomization.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -795,8 +785,8 @@ export default function SimplifiedSettings() {
           {/* New Additions to Algorithm Section: Edge & Banding */}
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Edge Preservation</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{edgePreservation.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Edge Preservation</label>
+              <span className="text-xs text-white/90 font-mono">{edgePreservation.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -811,8 +801,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Banding Reduction</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{bandingReduction.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Banding Reduction</label>
+              <span className="text-xs text-white/90 font-mono">{bandingReduction.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -834,13 +824,13 @@ export default function SimplifiedSettings() {
         {/* Retro Presets (Moved here) */}
         <div className="mb-4">
           <div className="flex justify-between items-center mb-2">
-            <label className="text-xs text-[#666]">Quick Presets</label>
+            <label className="text-xs text-white/55">Quick Presets</label>
             <button 
               onClick={() => {
                  const canvas = document.querySelector('canvas');
                  if (canvas) autoTheme(canvas);
               }}
-              className="text-[10px] font-bold text-[#2a2a2a] underline decoration-dotted"
+              className="text-[10px] font-bold text-white/90 underline decoration-dotted"
             >
               AUTO-EXTRACT THEME
             </button>
@@ -855,8 +845,8 @@ export default function SimplifiedSettings() {
                   key={presetId}
                   onClick={() => handleRetroPresetSelect(presetId)}
                   className={`p-2 border text-[9px] text-center leading-tight transition-colors ${isSelected
-                    ? 'border-[#2a2a2a] bg-[#2a2a2a] text-white'
-                    : 'border-[#d0cdc4] hover:border-[#2a2a2a] text-[#666]'
+                    ? 'border-white/30 bg-white text-[#0b0b0d]'
+                    : 'border-white/10 hover:border-white/40 text-white/55'
                     }`}
                   title={preset.description}
                 >
@@ -869,7 +859,7 @@ export default function SimplifiedSettings() {
           <select
             value={selectedRetroPreset || ''}
             onChange={(e) => e.target.value && handleRetroPresetSelect(e.target.value)}
-            className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer hover:border-[#2a2a2a] mb-4"
+            className="w-full p-2 bg-white/[0.05] border border-white/10 rounded-xl text-xs text-white/90 font-sans cursor-pointer hover:border-white/40 mb-4"
           >
             <option value="">More presets...</option>
             {Object.entries(paletteCategories).map(([category, presetIds]) => (
@@ -892,8 +882,8 @@ export default function SimplifiedSettings() {
         {/* Color Count */}
         <div className="mb-4">
           <div className="flex justify-between mb-2">
-            <label className="text-xs text-[#666]">Color Levels</label>
-            <span className="text-xs text-[#2a2a2a] font-mono">{colors}</span>
+            <label className="text-xs text-white/55">Color Levels</label>
+            <span className="text-xs text-white/90 font-mono">{colors}</span>
           </div>
           <input
             type="range"
@@ -912,7 +902,7 @@ export default function SimplifiedSettings() {
             <button
               key={idx}
               onClick={() => handlePaletteSelect(palette.dark, palette.light)}
-              className="aspect-square border border-[#d0cdc4] overflow-hidden cursor-pointer hover:border-[#2a2a2a] transition-colors"
+              className="aspect-square border border-white/10 rounded-xl overflow-hidden cursor-pointer hover:border-white/40 transition-colors"
               title={palette.name}
             >
               <div
@@ -928,7 +918,7 @@ export default function SimplifiedSettings() {
         {/* Ink and BG Color Pickers */}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
-            <label className="block text-xs text-[#666] mb-2">Ink</label>
+            <label className="block text-xs text-white/55 mb-2">Ink</label>
             <div className="relative">
               <input
                 type="color"
@@ -936,11 +926,11 @@ export default function SimplifiedSettings() {
                 onChange={(e) => setGlobalSetting('duotoneDark', e.target.value)}
                 className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
               />
-              <div className="w-full h-10 border border-[#d0cdc4]" style={{ backgroundColor: duotoneDark }} />
+              <div className="w-full h-10 border border-white/10 rounded-xl" style={{ backgroundColor: duotoneDark }} />
             </div>
           </div>
           <div>
-            <label className="block text-xs text-[#666] mb-2">Background</label>
+            <label className="block text-xs text-white/55 mb-2">Background</label>
             <div className="relative">
               <input
                 type="color"
@@ -948,18 +938,18 @@ export default function SimplifiedSettings() {
                 onChange={(e) => setGlobalSetting('duotoneLight', e.target.value)}
                 className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
               />
-              <div className="w-full h-10 border border-[#d0cdc4]" style={{ backgroundColor: duotoneLight }} />
+              <div className="w-full h-10 border border-white/10 rounded-xl" style={{ backgroundColor: duotoneLight }} />
             </div>
           </div>
         </div>
 
         {/* Color Space */}
         <div>
-          <label className="block text-xs text-[#666] mb-2">Color Space</label>
+          <label className="block text-xs text-white/55 mb-2">Color Space</label>
           <select
             value={colorSpace}
             onChange={(e) => setGlobalSetting('colorSpace', Number(e.target.value))}
-            className="w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer hover:border-[#2a2a2a]"
+            className="w-full p-2 bg-white/[0.05] border border-white/10 rounded-xl text-xs text-white/90 font-sans cursor-pointer hover:border-white/40"
           >
             <option value={0}>RGB (Standard)</option>
             <option value={1}>LAB (Perceptual)</option>
@@ -975,12 +965,12 @@ export default function SimplifiedSettings() {
             {/* Halftone Shape Selector */}
             <div className="mb-4">
               <div className="flex justify-between mb-1">
-                <label className="text-[10px] font-bold tracking-wider text-[#666] uppercase">Geometric Shape</label>
+                <label className="text-[10px] font-bold tracking-wider text-white/55 uppercase">Geometric Shape</label>
               </div>
               <select
                 value={halftoneShape}
                 onChange={(e) => setHalftoneSetting('halftoneShape', Number(e.target.value))}
-                className="w-full p-2 bg-[#f5f3ee] text-[#2a2a2a] border border-[#d0cdc4] font-['JetBrains_Mono',monospace] text-xs focus:outline-none focus:border-[#2a2a2a] appearance-none cursor-pointer"
+                className="w-full p-2 bg-white/[0.045] text-white/90 border border-white/10 rounded-xl font-sans text-xs focus:outline-none focus:border-white/40 appearance-none cursor-pointer"
               >
                 <option value={0}>Circle</option>
                 <option value={1}>Square</option>
@@ -993,8 +983,8 @@ export default function SimplifiedSettings() {
             {/* Rotation */}
             <div className="mb-4">
               <div className="flex justify-between mb-1">
-                <label className="text-[10px] font-bold tracking-wider text-[#666] uppercase">Rotation</label>
-                <span className="text-[10px] text-[#2a2a2a]">{halftoneRotation}°</span>
+                <label className="text-[10px] font-bold tracking-wider text-white/55 uppercase">Rotation</label>
+                <span className="text-[10px] text-white/90">{halftoneRotation}°</span>
               </div>
               <input
                 type="range"
@@ -1010,8 +1000,8 @@ export default function SimplifiedSettings() {
             {/* Spread (Overlap) */}
             <div className="mb-4">
               <div className="flex justify-between mb-1">
-                <label className="text-[10px] font-bold tracking-wider text-[#666] uppercase">Spread</label>
-                <span className="text-[10px] text-[#2a2a2a]">{halftoneSpread.toFixed(2)}</span>
+                <label className="text-[10px] font-bold tracking-wider text-white/55 uppercase">Spread</label>
+                <span className="text-[10px] text-white/90">{halftoneSpread.toFixed(2)}</span>
               </div>
               <input
                 type="range"
@@ -1038,8 +1028,8 @@ export default function SimplifiedSettings() {
         <div className="space-y-4">
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">VHS Effect</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{Math.round(vhsEffect * 100)}%</span>
+              <label className="text-xs text-white/55">VHS Effect</label>
+              <span className="text-xs text-white/90 font-mono">{Math.round(vhsEffect * 100)}%</span>
             </div>
             <input
               type="range"
@@ -1054,8 +1044,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Edge Glow</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{Math.round(edgeGlow * 100)}%</span>
+              <label className="text-xs text-white/55">Edge Glow</label>
+              <span className="text-xs text-white/90 font-mono">{Math.round(edgeGlow * 100)}%</span>
             </div>
             <input
               type="range"
@@ -1070,8 +1060,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Emboss</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{Math.round(emboss * 100)}%</span>
+              <label className="text-xs text-white/55">Emboss</label>
+              <span className="text-xs text-white/90 font-mono">{Math.round(emboss * 100)}%</span>
             </div>
             <input
               type="range"
@@ -1086,8 +1076,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Sharpen</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{sharpen.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Sharpen</label>
+              <span className="text-xs text-white/90 font-mono">{sharpen.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -1102,8 +1092,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Posterize</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{posterize.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Posterize</label>
+              <span className="text-xs text-white/90 font-mono">{posterize.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -1118,8 +1108,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Glitch Intensity</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{glitchIntensity.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Glitch Intensity</label>
+              <span className="text-xs text-white/90 font-mono">{glitchIntensity.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -1141,8 +1131,8 @@ export default function SimplifiedSettings() {
         <div className="space-y-4">
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Scanlines</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{scanlines.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Scanlines</label>
+              <span className="text-xs text-white/90 font-mono">{scanlines.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -1156,19 +1146,19 @@ export default function SimplifiedSettings() {
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[#666]">RGB Phosphor</span>
+            <span className="text-xs text-white/55">RGB Phosphor</span>
             <input
               type="checkbox"
               checked={phosphor}
               onChange={(e) => setGlobalSetting('phosphor', e.target.checked)}
-              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+              className="w-4 h-4 cursor-pointer accent-white"
             />
           </div>
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Screen Curvature</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{curvature.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Screen Curvature</label>
+              <span className="text-xs text-white/90 font-mono">{curvature.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -1183,8 +1173,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Vignette</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{vignette.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Vignette</label>
+              <span className="text-xs text-white/90 font-mono">{vignette.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -1199,8 +1189,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Chromatic Aberration</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{chromatic.toFixed(3)}</span>
+              <label className="text-xs text-white/55">Chromatic Aberration</label>
+              <span className="text-xs text-white/90 font-mono">{chromatic.toFixed(3)}</span>
             </div>
             <input
               type="range"
@@ -1215,8 +1205,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Bloom / Glow</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{bloom.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Bloom / Glow</label>
+              <span className="text-xs text-white/90 font-mono">{bloom.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -1237,31 +1227,31 @@ export default function SimplifiedSettings() {
       <Collapsible title="VIDEO / WEBCAM" defaultOpen={false} accessory={
         <button
           onClick={() => setWebcam(!isWebcam)}
-          className={`text-[10px] px-2 py-1 border ${isWebcam ? 'bg-[#2a2a2a] text-white border-[#2a2a2a]' : 'bg-white text-[#2a2a2a] border-[#d0cdc4]'}`}
+          className={`text-[10px] px-2 py-1 border ${isWebcam ? 'bg-white text-[#0b0b0d] border-white/30' : 'bg-white/[0.06] text-white/90 border-white/10'}`}
         >
           {isWebcam ? 'STOP WEBCAM' : 'USE WEBCAM'}
         </button>
       }>
 
         {(!isVideo && !isWebcam) && (
-          <p className="text-[10px] text-[#999] mb-3">Load a video or start webcam to enable these controls</p>
+          <p className="text-[10px] text-white/40 mb-3">Load a video or start webcam to enable these controls</p>
         )}
 
         <div className={`space-y-4 ${(!isVideo && !isWebcam) ? 'opacity-50 pointer-events-none' : ''}`}>
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[#666]">Temporal Dither</span>
+            <span className="text-xs text-white/55">Temporal Dither</span>
             <input
               type="checkbox"
               checked={temporalDither}
               onChange={(e) => setGlobalSetting('temporalDither', e.target.checked)}
-              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+              className="w-4 h-4 cursor-pointer accent-white"
             />
           </div>
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Temporal Speed</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{temporalSpeed.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Temporal Speed</label>
+              <span className="text-xs text-white/90 font-mono">{temporalSpeed.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -1276,8 +1266,8 @@ export default function SimplifiedSettings() {
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Temporal Stability</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{temporalStability.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Temporal Stability</label>
+              <span className="text-xs text-white/90 font-mono">{temporalStability.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -1288,24 +1278,24 @@ export default function SimplifiedSettings() {
               onChange={(e) => setGlobalSetting('temporalStability', Number(e.target.value))}
               className={sliderClass}
             />
-            <p className="text-[9px] text-[#999] mt-1">Reduces flickering between frames</p>
+            <p className="text-[9px] text-white/40 mt-1">Reduces flickering between frames</p>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[#666]">Frame Blending</span>
+            <span className="text-xs text-white/55">Frame Blending</span>
             <input
               type="checkbox"
               checked={frameBlending}
               onChange={(e) => setGlobalSetting('frameBlending', e.target.checked)}
-              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+              className="w-4 h-4 cursor-pointer accent-white"
             />
           </div>
 
           {frameBlending && (
             <div>
               <div className="flex justify-between mb-2">
-                <label className="text-xs text-[#666]">Blend Strength</label>
-                <span className="text-xs text-[#2a2a2a] font-mono">{frameBlendStrength.toFixed(2)}</span>
+                <label className="text-xs text-white/55">Blend Strength</label>
+                <span className="text-xs text-white/90 font-mono">{frameBlendStrength.toFixed(2)}</span>
               </div>
               <input
                 type="range"
@@ -1320,20 +1310,20 @@ export default function SimplifiedSettings() {
           )}
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[#666]">Motion Adaptive</span>
+            <span className="text-xs text-white/55">Motion Adaptive</span>
             <input
               type="checkbox"
               checked={motionAdaptive}
               onChange={(e) => setGlobalSetting('motionAdaptive', e.target.checked)}
-              className="w-4 h-4 cursor-pointer accent-[#2a2a2a]"
+              className="w-4 h-4 cursor-pointer accent-white"
             />
           </div>
 
           {motionAdaptive && (
             <div>
               <div className="flex justify-between mb-2">
-                <label className="text-xs text-[#666]">Motion Sensitivity</label>
-                <span className="text-xs text-[#2a2a2a] font-mono">{motionSensitivity.toFixed(2)}</span>
+                <label className="text-xs text-white/55">Motion Sensitivity</label>
+                <span className="text-xs text-white/90 font-mono">{motionSensitivity.toFixed(2)}</span>
               </div>
               <input
                 type="range"
@@ -1344,14 +1334,14 @@ export default function SimplifiedSettings() {
                 onChange={(e) => setGlobalSetting('motionSensitivity', Number(e.target.value))}
                 className={sliderClass}
               />
-              <p className="text-[9px] text-[#999] mt-1">Less dithering on moving areas</p>
+              <p className="text-[9px] text-white/40 mt-1">Less dithering on moving areas</p>
             </div>
           )}
 
           <div>
             <div className="flex justify-between mb-2">
-              <label className="text-xs text-[#666]">Frame Weight</label>
-              <span className="text-xs text-[#2a2a2a] font-mono">{temporalWeight.toFixed(2)}</span>
+              <label className="text-xs text-white/55">Frame Weight</label>
+              <span className="text-xs text-white/90 font-mono">{temporalWeight.toFixed(2)}</span>
             </div>
             <input
               type="range"

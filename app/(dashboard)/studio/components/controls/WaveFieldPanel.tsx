@@ -5,7 +5,7 @@ import { Collapsible } from './Collapsible';
 import ColorPopover from './ColorPopover';
 
 const sliderClass =
-  "w-full h-[2px] bg-[#d0cdc4] outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#2a2a2a] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-[#2a2a2a] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer";
+  "w-full h-[2px] bg-white/20 outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer";
 
 function Slider({ label, value, min, max, step, onChange, fmt }: {
   label: string; value: number; min: number; max: number; step: number;
@@ -14,8 +14,8 @@ function Slider({ label, value, min, max, step, onChange, fmt }: {
   return (
     <div>
       <div className="flex justify-between mb-2">
-        <label className="text-xs text-[#666]">{label}</label>
-        <span className="text-xs text-[#2a2a2a] font-mono">{fmt ? fmt(value) : value}</span>
+        <label className="text-xs text-white/55">{label}</label>
+        <span className="text-xs text-white/90 font-mono">{fmt ? fmt(value) : value}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(Number(e.target.value))} className={sliderClass} />
@@ -37,20 +37,20 @@ export default function WaveFieldPanel() {
 
   return (
     <div className="space-y-1">
-      <div className="pb-5 mb-5 border-b border-[#d0cdc4]">
-        <label className="text-xs text-[#666] block mb-2">Type</label>
+      <div className="pb-5 mb-5 border-b border-white/10">
+        <label className="text-xs text-white/55 block mb-2">Type</label>
         <div className="grid grid-cols-4 gap-2">
           {TYPES.map((label, i) => (
             <button
               key={label}
               onClick={() => setWaveType(i)}
-              className={`p-2 text-[11px] border transition-colors ${waveType === i ? 'bg-[#2a2a2a] text-[#e8e5dd] border-[#2a2a2a]' : 'bg-transparent text-[#666] border-[#d0cdc4] hover:border-[#2a2a2a]'}`}
+              className={`p-2 text-[11px] border transition-colors ${waveType === i ? 'bg-white text-[#0b0b0d] border-white/30' : 'bg-transparent text-white/55 border-white/10 hover:border-white/40'}`}
             >
               {label}
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-[#999] mt-2">Each theme is a starting point — tweak anything below.</p>
+        <p className="text-[10px] text-white/40 mt-2">Each theme is a starting point — tweak anything below.</p>
       </div>
 
       <Collapsible title="WAVE LOOK" defaultOpen={true}>
@@ -90,7 +90,7 @@ export default function WaveFieldPanel() {
             onChange={(v) => set('waveFov', v)} fmt={(v) => `${Math.round(v)}°`} />
           <Slider label="Loop Speed" value={waveSpeed} min={0.1} max={1.5} step={0.05}
             onChange={(v) => set('waveSpeed', v)} fmt={(v) => v.toFixed(2)} />
-          <p className="text-[10px] text-[#999]">Seamless loop ≈ {loopSecs.toFixed(1)}s. Exports loop exactly — one full cycle, no seam.</p>
+          <p className="text-[10px] text-white/40">Seamless loop ≈ {loopSecs.toFixed(1)}s. Exports loop exactly — one full cycle, no seam.</p>
         </div>
       </Collapsible>
     </div>

@@ -1546,13 +1546,13 @@ export default function WebGLCanvas() {
 
   return (
     <div
-      className="relative flex items-center justify-center w-full h-full bg-[#e8e5dd] overflow-hidden"
+      className="relative flex items-center justify-center w-full h-full bg-white/[0.05] overflow-hidden"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
       {!hasImage && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="text-center text-[#999] text-sm">
+          <div className="text-center text-white/40 text-sm">
             Upload an image or video to get started
           </div>
         </div>
@@ -1583,43 +1583,44 @@ export default function WebGLCanvas() {
 
       {hasImage && (
         <>
-          {/* Stats Overlay */}
-          <div className="absolute top-10 right-10 bg-[rgba(232,229,221,0.9)] border border-[#d0cdc4] px-4 py-3 text-xs text-[#666] pointer-events-none z-20">
-            <div className="text-[#2a2a2a] font-medium mb-1">
+          {/* Stats overlay — dark frosted chip, readable over any canvas */}
+          <div className="absolute top-6 right-6 bg-black/55 backdrop-blur-md border border-white/15 rounded-xl px-3.5 py-2.5 text-[11px] text-white/70 pointer-events-none z-20 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.7)]">
+            <div className="text-white font-semibold mb-0.5">
               <span className="fps">{ditherState.fps} FPS</span>
             </div>
-            <div>{resolution.width} × {resolution.height}</div>
-            <div className="mt-1">Zoom: {Math.round(zoom * 100)}%</div>
+            <div className="tabular-nums">{resolution.width} × {resolution.height}</div>
+            <div className="mt-0.5 text-white/55 tabular-nums">Zoom {Math.round(zoom * 100)}%</div>
           </div>
 
-          {/* Canvas Controls */}
-          <div className="absolute bottom-10 right-10 flex gap-2 z-30">
+          {/* Canvas zoom controls — single dark frosted pill */}
+          <div className="absolute bottom-6 right-6 flex items-center gap-0.5 p-1 bg-black/55 backdrop-blur-md border border-white/15 rounded-xl z-30 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.7)]">
             <button
               onClick={() => setZoom(z => Math.max(0.1, z - 0.1))}
-              className="w-8 h-8 flex items-center justify-center bg-white border border-[#d0cdc4] text-[#2a2a2a] hover:bg-[#f5f3ee]"
-              title="Zoom Out"
-            >-</button>
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-white/75 hover:text-white hover:bg-white/12 transition-colors"
+              title="Zoom out"
+            >−</button>
             <button
               onClick={() => setZoom(1)}
-              className="px-3 h-8 flex items-center justify-center bg-white border border-[#d0cdc4] text-[#2a2a2a] hover:bg-[#f5f3ee] text-xs font-medium"
-              title="Reset Zoom to 100%"
+              className="px-2 h-7 flex items-center justify-center rounded-lg text-white/75 hover:text-white hover:bg-white/12 transition-colors text-[11px] font-medium tabular-nums"
+              title="Reset zoom to 100%"
             >100%</button>
             <button
               onClick={() => setZoom(z => Math.min(10, z + 0.1))}
-              className="w-8 h-8 flex items-center justify-center bg-white border border-[#d0cdc4] text-[#2a2a2a] hover:bg-[#f5f3ee]"
-              title="Zoom In"
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-white/75 hover:text-white hover:bg-white/12 transition-colors"
+              title="Zoom in"
             >+</button>
+            <div className="w-px h-4 bg-white/15 mx-0.5" />
             <button
               onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
-              className="px-3 h-8 flex items-center justify-center bg-[#2a2a2a] text-white border border-[#2a2a2a] hover:opacity-90 text-xs"
-              title="Reset View"
-            >FIT</button>
+              className="px-2 h-7 flex items-center justify-center rounded-lg text-white/75 hover:text-white hover:bg-white/12 transition-colors text-[11px] font-medium"
+              title="Fit to view"
+            >Fit</button>
           </div>
 
-          {/* Comparison Slider */}
+          {/* Comparison slider */}
           {ditherState.comparisonMode && (
-            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-64 bg-white/90 p-3 border border-[#d0cdc4] z-30 flex flex-col items-center gap-2">
-              <div className="text-[10px] font-medium text-[#666] w-full flex justify-between">
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-64 bg-black/55 backdrop-blur-md p-3 border border-white/15 rounded-xl z-30 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.7)] flex flex-col items-center gap-2">
+              <div className="text-[10px] font-medium text-white/60 w-full flex justify-between">
                 <span>ORIGINAL</span>
                 <span>DITHERED</span>
               </div>
@@ -1630,7 +1631,7 @@ export default function WebGLCanvas() {
                 step="0.01"
                 value={ditherState.comparisonPosition}
                 onChange={(e) => useDitherStore.getState().setComparisonPosition(parseFloat(e.target.value))}
-                className="w-full h-1 bg-[#d0cdc4] rounded-lg appearance-none cursor-pointer"
+                className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
               />
             </div>
           )}

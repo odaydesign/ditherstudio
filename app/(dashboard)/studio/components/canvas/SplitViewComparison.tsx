@@ -97,8 +97,8 @@ export default function SplitViewComparison({ originalImageUrl }: SplitViewCompa
                 style={{ left: `calc(${comparisonPosition * 100}% - 1px)` }}
             >
                 {/* Handle circle */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full shadow-xl flex items-center justify-center border-2 border-[#2a2a2a]">
-                    <svg className="w-5 h-5 text-[#2a2a2a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full shadow-xl flex items-center justify-center border-2 border-white/30">
+                    <svg className="w-5 h-5 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
                     </svg>
                 </div>
@@ -110,7 +110,7 @@ export default function SplitViewComparison({ originalImageUrl }: SplitViewCompa
                     e.stopPropagation();
                     setComparisonMode(false);
                 }}
-                className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#2a2a2a] text-white px-4 py-2 text-xs rounded hover:bg-[#3a3a3a] transition-colors z-10"
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white text-[#0b0b0d] px-4 py-2 text-xs rounded hover:bg-white/15 transition-colors z-10"
             >
                 EXIT COMPARISON
             </button>

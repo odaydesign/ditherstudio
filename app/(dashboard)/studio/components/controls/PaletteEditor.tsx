@@ -52,20 +52,20 @@ export default function PaletteEditor() {
     };
 
     return (
-        <div className="mt-4 border-t border-[#d0cdc4] pt-4">
+        <div className="mt-4 border-t border-white/10 pt-4">
             <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-bold text-[#666] uppercase tracking-wider">
+                <div className="text-xs font-bold text-white/55 uppercase tracking-wider">
                     Custom Palette
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-[#666]">COLORS:</span>
+                    <span className="text-[10px] text-white/55">COLORS:</span>
                     <input
                         type="number"
                         min="2"
                         max="16"
                         value={colors}
                         onChange={(e) => updateColorCount(parseInt(e.target.value) || 2)}
-                        className="w-10 p-1 text-xs border border-[#d0cdc4] text-center"
+                        className="w-10 p-1 text-xs border border-white/10 rounded-xl text-center"
                     />
                 </div>
             </div>
@@ -75,7 +75,7 @@ export default function PaletteEditor() {
                 <button
                     onClick={handleExtract}
                     disabled={!imageSrc || isExtracting}
-                    className="flex-1 py-1 px-2 bg-white border border-[#d0cdc4] text-[10px] uppercase font-medium hover:bg-[#f5f3ee] disabled:opacity-50 transition-colors"
+                    className="flex-1 py-1 px-2 bg-white/[0.06] border border-white/10 rounded-xl text-[10px] uppercase font-medium text-white/80 hover:bg-white/10 hover:text-white disabled:opacity-50 transition-colors"
                 >
                     {isExtracting ? 'Extracting...' : 'Extract From Image'}
                 </button>
@@ -95,7 +95,7 @@ export default function PaletteEditor() {
                                 disabled={!isActive}
                             />
                             <div
-                                className={`w-full aspect-square rounded border ${isActive ? 'border-[#d0cdc4] shadow-sm' : 'border-dashed border-[#ccc]'} transition-all`}
+                                className={`w-full aspect-square rounded border ${isActive ? 'border-white/10 shadow-sm' : 'border-dashed border-white/15'} transition-all`}
                                 style={{ backgroundColor: color }}
                             />
                             {isActive && (
@@ -108,7 +108,7 @@ export default function PaletteEditor() {
                 })}
             </div>
 
-            <div className="text-[10px] text-[#999] mt-2">
+            <div className="text-[10px] text-white/40 mt-2">
                 Palette size: {colors}. Inactive colors are ignored.
             </div>
         </div>

@@ -46,8 +46,8 @@ export default function UploadZone({ onBatchSelect }: { onBatchSelect?: (files: 
         onDrop={handleDrop}
         className={`border border-dashed p-8 text-center cursor-pointer transition-all ${
           isDragging
-            ? 'border-[#2a2a2a] bg-[rgba(0,0,0,0.05)]'
-            : 'border-[#d0cdc4] hover:border-[#2a2a2a] hover:bg-[rgba(0,0,0,0.02)]'
+            ? 'border-white/30 bg-[rgba(0,0,0,0.05)]'
+            : 'border-white/10 hover:border-white/40 hover:bg-[rgba(0,0,0,0.02)]'
         }`}
       >
         <input
@@ -59,7 +59,7 @@ export default function UploadZone({ onBatchSelect }: { onBatchSelect?: (files: 
           onChange={handleFileChange}
         />
         <div className="text-sm">{isDragging ? 'DROP TO UPLOAD' : 'DROP FILE OR CLICK'}</div>
-        <div className="text-xs text-[#888] mt-2">
+        <div className="text-xs text-white/40 mt-2">
           SUPPORTS: JPG, PNG, GIF, MP4, WEBM
           <br />
           (Select multiple for batch processing)
@@ -69,13 +69,13 @@ export default function UploadZone({ onBatchSelect }: { onBatchSelect?: (files: 
       <div className="grid grid-cols-2 gap-2 mt-2">
         <button
           onClick={() => useDitherStore.getState().setWebcam(true)}
-          className="p-2 text-[10px] bg-white border border-[#d0cdc4] text-[#666] hover:bg-[#2a2a2a] hover:text-[#e8e5dd] hover:border-[#2a2a2a] transition-colors"
+          className="p-2 text-[10px] bg-white/[0.05] border border-white/10 rounded-xl text-white/70 hover:bg-white hover:text-[#0b0b0d] hover:border-white/40 transition-colors"
         >
           USE WEBCAM
         </button>
         <button
           onClick={handleClick}
-          className="p-2 text-[10px] bg-white border border-[#d0cdc4] text-[#666] hover:bg-[#2a2a2a] hover:text-[#e8e5dd] hover:border-[#2a2a2a] transition-colors"
+          className="p-2 text-[10px] bg-white/[0.05] border border-white/10 rounded-xl text-white/70 hover:bg-white hover:text-[#0b0b0d] hover:border-white/40 transition-colors"
         >
           BROWSE FILES
         </button>

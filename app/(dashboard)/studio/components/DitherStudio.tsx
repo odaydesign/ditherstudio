@@ -5,10 +5,33 @@ import { generateSVG } from '@/lib/utils/svgGenerator';
 import WebGLCanvas from './canvas/WebGLCanvas';
 import UploadZone from './controls/UploadZone';
 import SimplifiedSettings from './controls/SimplifiedSettings';
+import GenerativePanel from './controls/GenerativePanel';
+import Object3DPanel from './controls/Object3DPanel';
+import WaveFieldPanel from './controls/WaveFieldPanel';
 import { useDitherStore } from '@/store/ditherStore';
 import { generatorExport } from '@/lib/three/generatorController';
 import GIF from 'gif.js';
 import JSZip from 'jszip';
+
+// ---- Inline icon set (no dependency) — 16px stroke icons for the command bar ----
+const ic = 'w-[15px] h-[15px]';
+const IconUpload = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14" /></svg>);
+const IconGenerate = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4L12 3zM19 14l.9 2.3L22 17l-2.1.7L19 20l-.9-2.3L16 17l2.1-.7L19 14z" /></svg>);
+const IconCube = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7l9-5zM3 7l9 5 9-5M12 12v10" /></svg>);
+const IconWave = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12c2.5-4 5-4 7.5 0s5 4 7.5 0 5-4 5 0" /></svg>);
+const IconShuffle = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" /></svg>);
+const IconReset = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5" /></svg>);
+const IconExport = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" /></svg>);
+
+function PanelHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="h-11 shrink-0 flex items-center justify-between px-4 border-b border-white/10">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">{title}</span>
+      {subtitle && <span className="text-[10px] text-white/35 lowercase tracking-normal">{subtitle}</span>}
+    </div>
+  );
+}
+
 
 // Define Electron API interface
 interface ElectronAPI {
@@ -903,91 +926,81 @@ export default function DitherStudio() {
   };
 
   return (
-    <div className="h-screen grid grid-cols-[300px_400px_1fr] gap-0 bg-[#e8e5dd] font-['JetBrains_Mono',monospace] text-[13px] overflow-hidden">
-      {/* Column 1: File Upload & Actions */}
-      <div className="bg-[#e8e5dd] p-5 border-r border-[#d0cdc4] overflow-y-auto">
-        <div
-          className="text-sm font-medium mb-6 mt-8 text-[#2a2a2a] select-none"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
-          DITHER.STUDIO
+    <div className="h-screen flex flex-col bg-transparent font-sans text-[13px] text-white/90 overflow-hidden">
+      {/* ===== Command bar ===== */}
+      <header className="h-12 shrink-0 flex items-center gap-2 px-3 border-b border-white/10 bg-white/[0.04] backdrop-blur-2xl relative z-30" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+        <div className="flex items-center pl-[68px] pr-1 select-none">
+          <span className="text-[12px] font-semibold tracking-[0.24em] text-white/95">DITHER<span className="text-white/35">.</span>STUDIO</span>
+        </div>
+        <div className="w-px h-5 bg-white/10 mx-1" />
+
+        {/* Source segmented control */}
+        <div className="flex items-center gap-0.5 p-1 rounded-xl bg-white/[0.05] border border-white/10" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <button onClick={() => { const st = useDitherStore.getState(); st.setThreeDEnabled(false); st.setGenerativeEnabled(false); st.setWaveFieldEnabled(false); }}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${!ditherState.isGenerative && !ditherState.is3D && !ditherState.isWaveField ? 'bg-white text-[#0b0b0d]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}><IconUpload />Upload</button>
+          <button onClick={() => useDitherStore.getState().setGenerativeEnabled(true)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${ditherState.isGenerative ? 'bg-white text-[#0b0b0d]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}><IconGenerate />Generate</button>
+          <button onClick={() => useDitherStore.getState().setThreeDEnabled(true)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${ditherState.is3D ? 'bg-white text-[#0b0b0d]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}><IconCube />3D</button>
+          <button onClick={() => useDitherStore.getState().setWaveFieldEnabled(true)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${ditherState.isWaveField ? 'bg-white text-[#0b0b0d]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}><IconWave />Waves</button>
         </div>
 
-        <div className="mb-8" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          <div className="text-sm text-[#666] mb-2">/SOURCE</div>
+        <div className="flex-1" />
 
-          {/* Upload / Generate / 3D / Waves source toggle (single source of truth) */}
-          <div className="grid grid-cols-4 gap-2 mb-3">
-            <button
-              onClick={() => { const st = useDitherStore.getState(); st.setThreeDEnabled(false); st.setGenerativeEnabled(false); st.setWaveFieldEnabled(false); }}
-              className={`p-2 text-xs border transition-colors ${!ditherState.isGenerative && !ditherState.is3D && !ditherState.isWaveField ? 'bg-[#2a2a2a] text-[#e8e5dd] border-[#2a2a2a]' : 'bg-transparent text-[#666] border-[#d0cdc4] hover:border-[#2a2a2a]'}`}
-            >
-              UPLOAD
-            </button>
-            <button
-              onClick={() => useDitherStore.getState().setGenerativeEnabled(true)}
-              className={`p-2 text-xs border transition-colors ${ditherState.isGenerative ? 'bg-[#2a2a2a] text-[#e8e5dd] border-[#2a2a2a]' : 'bg-transparent text-[#666] border-[#d0cdc4] hover:border-[#2a2a2a]'}`}
-            >
-              GENERATE
-            </button>
-            <button
-              onClick={() => useDitherStore.getState().setThreeDEnabled(true)}
-              className={`p-2 text-xs border transition-colors ${ditherState.is3D ? 'bg-[#2a2a2a] text-[#e8e5dd] border-[#2a2a2a]' : 'bg-transparent text-[#666] border-[#d0cdc4] hover:border-[#2a2a2a]'}`}
-            >
-              3D
-            </button>
-            <button
-              onClick={() => useDitherStore.getState().setWaveFieldEnabled(true)}
-              className={`p-2 text-xs border transition-colors ${ditherState.isWaveField ? 'bg-[#2a2a2a] text-[#e8e5dd] border-[#2a2a2a]' : 'bg-transparent text-[#666] border-[#d0cdc4] hover:border-[#2a2a2a]'}`}
-            >
-              WAVES
-            </button>
-          </div>
+        <div className="flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <button onClick={() => useDitherStore.getState().surpriseMe()} title="Surprise me" className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10">
+            <IconShuffle />
+          </button>
+          <button onClick={() => { useDitherStore.getState().resetAll(); setSelectedPresetId(''); }} title="Reset all" className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10">
+            <IconReset />
+          </button>
+          <button onClick={() => exportImage('png')} title="Quick export PNG" className="flex items-center gap-1.5 pl-2.5 pr-3 h-8 rounded-lg bg-white text-[#0b0b0d] text-xs font-medium hover:opacity-90 active:scale-[0.98] transition-all">
+            <IconExport />Export
+          </button>
+        </div>
+      </header>
 
-          {ditherState.isWaveField ? (
-            <div className="p-3 bg-[#f5f3ee] border border-[#d0cdc4] text-[10px] text-[#666] leading-relaxed">
-              ∿ Flowing wave field — tune the look, colours, camera &amp; loop speed in the controls panel, then dither it. Animates + exports as a seamless loop.
-            </div>
-          ) : ditherState.is3D ? (
-            <div className="p-3 bg-[#f5f3ee] border border-[#d0cdc4] text-[10px] text-[#666] leading-relaxed">
-              ▣ Rendering a 3D object — pick the shape, material, camera &amp; PS1 look in the controls panel, then dither it.
-            </div>
-          ) : !ditherState.isGenerative ? (
-            <>
-              <UploadZone onBatchSelect={(files) => setBatchFiles(files)} />
-              {batchFiles.length > 0 && (
-                <div className="mt-2 p-2 bg-[#f5f3ee] border border-[#d0cdc4] text-[10px]">
-                  <div className="flex justify-between items-center mb-2">
-                    <span>{batchFiles.length} FILES SELECTED</span>
-                    <button onClick={() => setBatchFiles([])} className="text-[#e74c3c]">CLEAR</button>
-                  </div>
-                  <button
-                    onClick={exportBatch}
-                    disabled={isBatchProcessing}
-                    className="w-full p-2 bg-[#2a2a2a] text-[#e8e5dd] transition-opacity hover:opacity-80 disabled:opacity-40"
-                  >
-                    {isBatchProcessing ? `PROCESSING ${exportProgress}%` : 'GENERATE BATCH ZIP'}
-                  </button>
-                </div>
+      {/* ===== Body ===== */}
+      <div className="flex-1 flex min-h-0">
+        {/* LEFT — Source */}
+        <aside className="w-[300px] shrink-0 flex flex-col border-r border-white/10 bg-white/[0.025] backdrop-blur-2xl">
+          <PanelHeader title="Source" subtitle={ditherState.isWaveField ? 'wave field' : ditherState.is3D ? '3d object' : ditherState.isGenerative ? 'generative' : 'upload'} />
+          <div className="flex-1 overflow-y-auto p-4">
+            {/* Source creative controls */}
+            <div className="mb-8">
+              {ditherState.isWaveField ? <WaveFieldPanel /> : ditherState.is3D ? <Object3DPanel /> : ditherState.isGenerative ? <GenerativePanel /> : (
+                <>
+                  <UploadZone onBatchSelect={(files) => setBatchFiles(files)} />
+                  {batchFiles.length > 0 && (
+                    <div className="mt-2 p-2 bg-white/[0.045] border border-white/10 rounded-xl text-[10px]">
+                      <div className="flex justify-between items-center mb-2">
+                        <span>{batchFiles.length} FILES SELECTED</span>
+                        <button onClick={() => setBatchFiles([])} className="text-[#e74c3c]">CLEAR</button>
+                      </div>
+                      <button
+                        onClick={exportBatch}
+                        disabled={isBatchProcessing}
+                        className="w-full p-2 rounded-lg bg-white text-[#0b0b0d] transition-opacity hover:opacity-80 disabled:opacity-40"
+                      >
+                        {isBatchProcessing ? `PROCESSING ${exportProgress}%` : 'GENERATE BATCH ZIP'}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
-            </>
-          ) : (
-            <div className="p-3 bg-[#f5f3ee] border border-[#d0cdc4] text-[10px] text-[#666] leading-relaxed">
-              ✦ Generating a background — tune the pattern, colours, grid, bands &amp; motion in the controls panel. Presets: Hotcoin, Tunnel, Aurora…
             </div>
-          )}
-        </div>
 
         {/* Presets Section */}
         <div className="mb-8">
-          <div className="text-sm text-[#666] mb-2">/PRESETS</div>
+          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/40 mb-3">/PRESETS</div>
 
           {/* Preset Dropdown */}
           <select
             value={selectedPresetId}
             onChange={(e) => handlePresetSelect(e.target.value)}
             disabled={isLoading}
-            className="w-full p-3 mb-2 bg-[#f5f3ee] text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs focus:outline-none focus:border-[#2a2a2a] disabled:opacity-50"
+            className="w-full p-3 mb-2 bg-white/[0.045] text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs focus:outline-none focus:border-white/40 disabled:opacity-50"
           >
             <option value="">{isLoading ? 'Loading...' : '-- Select a preset --'}</option>
             <optgroup label="Built-in Presets">
@@ -1012,18 +1025,18 @@ export default function DitherStudio() {
           {!showSaveDialog ? (
             <button
               onClick={() => setShowSaveDialog(true)}
-              className="w-full p-2 bg-[#2a2a2a] text-[#e8e5dd] border-none cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80"
+              className="w-full p-2 bg-white text-[#0b0b0d] border-none cursor-pointer font-sans text-xs transition-opacity hover:opacity-80"
             >
               + SAVE CURRENT SETTINGS
             </button>
           ) : (
-            <div className="p-3 border border-[#d0cdc4] bg-[#f5f3ee]">
+            <div className="p-3 border border-white/10 rounded-xl bg-white/[0.045]">
               <input
                 type="text"
                 value={newPresetName}
                 onChange={(e) => setNewPresetName(e.target.value)}
                 placeholder="Enter preset name..."
-                className="w-full p-2 mb-2 bg-white text-[#2a2a2a] border border-[#d0cdc4] font-['JetBrains_Mono',monospace] text-xs focus:outline-none focus:border-[#2a2a2a]"
+                className="w-full p-2 mb-2 bg-white/[0.06] text-white/90 border border-white/10 rounded-xl font-sans text-xs focus:outline-none focus:border-white/40"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !isSaving) saveNewPreset();
@@ -1037,7 +1050,7 @@ export default function DitherStudio() {
                 <button
                   onClick={saveNewPreset}
                   disabled={!newPresetName.trim() || isSaving}
-                  className="flex-1 p-2 bg-[#2a2a2a] text-[#e8e5dd] border-none cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex-1 p-2 bg-white text-[#0b0b0d] border-none cursor-pointer font-sans text-xs transition-opacity hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isSaving ? 'SAVING...' : 'SAVE'}
                 </button>
@@ -1046,7 +1059,7 @@ export default function DitherStudio() {
                     setShowSaveDialog(false);
                     setNewPresetName('');
                   }}
-                  className="flex-1 p-2 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80"
+                  className="flex-1 p-2 bg-transparent text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-opacity hover:opacity-80"
                 >
                   CANCEL
                 </button>
@@ -1062,7 +1075,7 @@ export default function DitherStudio() {
                   deletePreset(selectedPresetId);
                 }
               }}
-              className="w-full p-2 mt-2 bg-transparent text-[#999] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:text-[#e74c3c] hover:border-[#e74c3c]"
+              className="w-full p-2 mt-2 bg-transparent text-white/40 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-opacity hover:opacity-80 hover:text-[#e74c3c] hover:border-[#e74c3c]"
             >
               DELETE PRESET
             </button>
@@ -1070,33 +1083,33 @@ export default function DitherStudio() {
         </div>
 
         <div className="mb-8">
-          <div className="text-sm text-[#666] mb-2">/EXPORT</div>
+          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/40 mb-3">/EXPORT</div>
 
           <button
             onClick={() => exportImage('png')}
-            className="w-full p-3 bg-[#2a2a2a] text-[#e8e5dd] border-none cursor-pointer font-['JetBrains_Mono',monospace] text-sm transition-opacity hover:opacity-80"
+            className="w-full p-3 bg-white text-[#0b0b0d] border-none cursor-pointer font-sans text-sm transition-opacity hover:opacity-80"
           >
             EXPORT PNG
           </button>
 
           <button
             onClick={() => setShowExportMenu(!showExportMenu)}
-            className="w-full p-2 mt-2 bg-transparent text-[#666] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80"
+            className="w-full p-2 mt-2 bg-transparent text-white/55 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-opacity hover:opacity-80"
           >
             {showExportMenu ? '▲ LESS OPTIONS' : '▼ MORE OPTIONS'}
           </button>
 
           {showExportMenu && (
-            <div className="mt-2 p-3 border border-[#d0cdc4] bg-[#f5f3ee]">
+            <div className="mt-2 p-3 border border-white/10 rounded-xl bg-white/[0.045]">
               <div className="mb-3">
                 <button
                   onClick={() => exportImage('jpeg')}
-                  className="w-full p-2 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd]"
+                  className="w-full p-2 bg-transparent text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-opacity hover:opacity-80 hover:bg-white/[0.05]"
                 >
                   EXPORT JPG
                 </button>
                 <div className="flex items-center mt-2 gap-2">
-                  <span className="text-[10px] text-[#666]">Quality:</span>
+                  <span className="text-[10px] text-white/55">Quality:</span>
                   <input
                     type="range"
                     min="0.1"
@@ -1104,15 +1117,15 @@ export default function DitherStudio() {
                     step="0.1"
                     value={jpegQuality}
                     onChange={(e) => setJpegQuality(Number(e.target.value))}
-                    className="flex-1 h-[2px] bg-[#d0cdc4] outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#2a2a2a] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-[#2a2a2a] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer"
+                    className="flex-1 h-[2px] bg-white/20 outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer"
                   />
-                  <span className="text-[10px] text-[#2a2a2a] w-8">{Math.round(jpegQuality * 100)}%</span>
+                  <span className="text-[10px] text-white/90 w-8">{Math.round(jpegQuality * 100)}%</span>
                 </div>
               </div>
 
               <button
                 onClick={() => exportImage('webp')}
-                className="w-full p-2 mb-2 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd]"
+                className="w-full p-2 mb-2 bg-transparent text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-opacity hover:opacity-80 hover:bg-white/[0.05]"
               >
                 EXPORT WEBP
               </button>
@@ -1121,23 +1134,23 @@ export default function DitherStudio() {
               {ditherState.asciiMode === 0 && (
                 <button
                   onClick={handleExportSVG}
-                  className="w-full text-left p-2 mb-2 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd]"
+                  className="w-full text-left p-2 mb-2 bg-transparent text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-opacity hover:opacity-80 hover:bg-white/[0.05]"
                 >
                   EXPORT SVG (VECTOR)
                 </button>
               )}
 
-              <div className="border-t border-[#d0cdc4] pt-2 mt-2">
-                <div className="text-[10px] text-[#666] mb-2">PRESET FILE</div>
+              <div className="border-t border-white/10 pt-2 mt-2">
+                <div className="text-[10px] text-white/55 mb-2">PRESET FILE</div>
                 <button
                   onClick={exportPresetFile}
-                  className="w-full p-2 mb-1 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd]"
+                  className="w-full p-2 mb-1 bg-transparent text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-opacity hover:opacity-80 hover:bg-white/[0.05]"
                 >
                   EXPORT PRESET (.json)
                 </button>
                 <button
                   onClick={() => presetInputRef.current?.click()}
-                  className="w-full p-2 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd]"
+                  className="w-full p-2 bg-transparent text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-opacity hover:opacity-80 hover:bg-white/[0.05]"
                 >
                   IMPORT PRESET (.json)
                 </button>
@@ -1150,42 +1163,42 @@ export default function DitherStudio() {
                 />
               </div>
 
-              <div className="border-t border-[#d0cdc4] pt-2 mt-2">
-                <div className="text-[10px] text-[#666] mb-2">PALETTE</div>
+              <div className="border-t border-white/10 pt-2 mt-2">
+                <div className="text-[10px] text-white/55 mb-2">PALETTE</div>
                 <button
                   onClick={exportPalette}
-                  className="w-full p-2 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd]"
+                  className="w-full p-2 bg-transparent text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-opacity hover:opacity-80 hover:bg-white/[0.05]"
                 >
                   EXPORT PALETTE (.hex)
                 </button>
               </div>
 
               {/* Video/GIF Export */}
-              <div className="border-t border-[#d0cdc4] pt-2 mt-2">
-                <div className="text-[10px] text-[#666] mb-2">VIDEO / GIF</div>
+              <div className="border-t border-white/10 pt-2 mt-2">
+                <div className="text-[10px] text-white/55 mb-2">VIDEO / GIF</div>
 
                 {/* Duration & FPS Controls */}
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] text-[#666]">Duration:</span>
+                  <span className="text-[10px] text-white/55">Duration:</span>
                   <input
                     type="number"
                     min="1"
                     max="30"
                     value={exportDuration}
                     onChange={(e) => setExportDuration(Number(e.target.value))}
-                    className="w-12 p-1 bg-white text-[#2a2a2a] border border-[#d0cdc4] font-['JetBrains_Mono',monospace] text-[10px] focus:outline-none"
+                    className="w-12 p-1 bg-white/[0.06] text-white/90 border border-white/10 rounded-xl font-sans text-[10px] focus:outline-none"
                   />
-                  <span className="text-[10px] text-[#666]">sec</span>
+                  <span className="text-[10px] text-white/55">sec</span>
                 </div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] text-[#666]">FPS:</span>
+                  <span className="text-[10px] text-white/55">FPS:</span>
                   <input
                     type="number"
                     min="5"
                     max="60"
                     value={exportFps}
                     onChange={(e) => setExportFps(Number(e.target.value))}
-                    className="w-12 p-1 bg-white text-[#2a2a2a] border border-[#d0cdc4] font-['JetBrains_Mono',monospace] text-[10px] focus:outline-none"
+                    className="w-12 p-1 bg-white/[0.06] text-white/90 border border-white/10 rounded-xl font-sans text-[10px] focus:outline-none"
                   />
                 </div>
 
@@ -1195,9 +1208,9 @@ export default function DitherStudio() {
                       type="checkbox"
                       checked={loopExport}
                       onChange={(e) => setLoopExport(e.target.checked)}
-                      className="w-3.5 h-3.5 accent-[#2a2a2a]"
+                      className="w-3.5 h-3.5 accent-white"
                     />
-                    <span className="text-[10px] text-[#666]">
+                    <span className="text-[10px] text-white/55">
                       🔁 Seamless loop
                       {(() => {
                         const genAnim = ditherState.isGenerative && ditherState.generativeAnimate && ditherState.generativeMotion !== 6;
@@ -1219,12 +1232,12 @@ export default function DitherStudio() {
                     type="checkbox"
                     checked={ditherState.videoMaxDetail}
                     onChange={(e) => ditherState.setGlobalSetting('videoMaxDetail', e.target.checked)}
-                    className="w-3.5 h-3.5 mt-0.5 accent-[#2a2a2a]"
+                    className="w-3.5 h-3.5 mt-0.5 accent-white"
                   />
-                  <span className="text-[10px] text-[#666] leading-snug">
+                  <span className="text-[10px] text-white/55 leading-snug">
                     Max-detail video (VP9 · up to 8K)
                     <br />
-                    <span className="text-[#999]">
+                    <span className="text-white/40">
                       {ditherState.videoMaxDetail
                         ? '⚠ exact colors at full detail, but the .mp4 plays only in VLC / Chrome'
                         : 'off = H.264/4K, plays everywhere (dither rendered a touch coarser to keep colors exact)'}
@@ -1234,10 +1247,10 @@ export default function DitherStudio() {
 
                 {isExporting && (
                   <div className="mb-2">
-                    <div className="text-[10px] text-[#666] mb-1">Exporting... {exportProgress}%</div>
-                    <div className="w-full h-1 bg-[#d0cdc4] rounded">
+                    <div className="text-[10px] text-white/55 mb-1">Exporting... {exportProgress}%</div>
+                    <div className="w-full h-1 bg-white/20 rounded">
                       <div
-                        className="h-1 bg-[#2a2a2a] rounded transition-all"
+                        className="h-1 bg-white rounded transition-all"
                         style={{ width: `${exportProgress}%` }}
                       />
                     </div>
@@ -1247,14 +1260,14 @@ export default function DitherStudio() {
                 <button
                   onClick={exportGIF}
                   disabled={isExporting}
-                  className="w-full p-2 mb-1 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full p-2 mb-1 bg-transparent text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-opacity hover:opacity-80 hover:bg-white/[0.05] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   EXPORT GIF
                 </button>
                 <button
                   onClick={exportVideo}
                   disabled={isExporting}
-                  className="w-full p-2 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-xs transition-opacity hover:opacity-80 hover:bg-[#e8e5dd] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full p-2 bg-transparent text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-opacity hover:opacity-80 hover:bg-white/[0.05] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   EXPORT VIDEO (MP4 / WebM)
                 </button>
@@ -1263,38 +1276,21 @@ export default function DitherStudio() {
           )}
         </div>
 
-        <div className="mb-8">
-          <div className="text-sm text-[#666] mb-2">/ACTIONS</div>
-          <button
-            onClick={() => useDitherStore.getState().surpriseMe()}
-            className="w-full p-3 mb-2 bg-[#2a2a2a] text-[#e8e5dd] border-none cursor-pointer font-['JetBrains_Mono',monospace] text-sm transition-all hover:opacity-90 hover:scale-[1.02] active:scale-[0.98]"
-          >
-            ✦ SURPRISE ME
-          </button>
-          <button
-            onClick={() => {
-              useDitherStore.getState().resetAll();
-              setSelectedPresetId('');
-            }}
-            className="w-full p-3 bg-transparent text-[#2a2a2a] border border-[#d0cdc4] cursor-pointer font-['JetBrains_Mono',monospace] text-sm transition-opacity hover:opacity-80"
-          >
-            RESET ALL
-          </button>
-        </div>
-      </div>
+          </div>
+        </aside>
 
-      {/* Column 2: Controls */}
-      <div className="bg-[#e8e5dd] p-5 border-r border-[#d0cdc4] overflow-y-auto relative">
-        <div className="absolute top-0 left-0 right-0 h-6" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties} />
-        <div className="mt-8">
-          <SimplifiedSettings />
-        </div>
-      </div>
+        {/* CENTER — Canvas stage */}
+        <main className="flex-1 min-w-0 relative bg-black/40">
+          <WebGLCanvas />
+        </main>
 
-      {/* Column 3: Canvas */}
-      <div className="relative bg-[#e8e5dd]">
-        <div className="absolute top-0 left-0 right-0 h-6 z-10" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties} />
-        <WebGLCanvas />
+        {/* RIGHT — Adjust */}
+        <aside className="w-[340px] shrink-0 flex flex-col border-l border-white/10 bg-white/[0.025] backdrop-blur-2xl">
+          <PanelHeader title="Adjust" />
+          <div className="flex-1 overflow-y-auto p-4">
+            <SimplifiedSettings />
+          </div>
+        </aside>
       </div>
     </div>
   );

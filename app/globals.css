@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #08080a;
+  --foreground: #f2f2f4;
+  --muted: rgba(255, 255, 255, 0.55);
+  --hairline: rgba(255, 255, 255, 0.10);
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-strong: rgba(255, 255, 255, 0.09);
 }
 
 @theme inline {
@@ -12,40 +16,113 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(1200px 820px at 12% -12%, rgba(255, 255, 255, 0.06), transparent 60%),
+    radial-gradient(1100px 760px at 112% 8%, rgba(255, 255, 255, 0.045), transparent 55%),
+    var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.011em;
 }
 
-/* Custom Scrollbar - Matching Slider Aesthetic */
-@media screen and (min-width: 768px) {
-  ::-webkit-scrollbar {
-    width: 12px;
-    height: 12px;
-  }
+/* Modern, rounded form controls by default (Apple-ish) */
+button {
+  border-radius: 10px;
+}
+input:not([type="range"]):not([type="color"]):not([type="checkbox"]),
+select,
+textarea {
+  border-radius: 10px;
+}
 
-  ::-webkit-scrollbar-track {
-    background: linear-gradient(to right, transparent 5px, #d0cdc4 5px, #d0cdc4 7px, transparent 7px);
-  }
+/* Frosted-glass surfaces */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid var(--hairline);
+}
+.glass-strong {
+  background: var(--glass-strong);
+  backdrop-filter: blur(26px) saturate(170%);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  border: 1px solid var(--hairline);
+}
+/* Hover-lift cards */
+.glass-hover {
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.glass-hover:hover {
+  background: var(--glass-strong);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 40px -16px rgba(0, 0, 0, 0.7);
+}
 
-  ::-webkit-scrollbar-thumb {
-    background: #2a2a2a;
-    border-radius: 0;
-  }
+/* Smooth interaction transitions */
+button,
+a,
+select,
+input,
+label {
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease,
+    opacity 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
 
-  ::-webkit-scrollbar-thumb:hover {
-    background: #000000;
+::selection {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+input[type="range"] {
+  accent-color: #ffffff;
+}
+
+/* Thin, subtle scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Entrance animations */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
-  
-  ::-webkit-scrollbar-corner {
-    background: transparent;
+  to {
+    opacity: 1;
+    transform: none;
   }
+}
+.animate-fade-up {
+  animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }

@@ -54,12 +54,12 @@ export default function AlgorithmSelector() {
 
   return (
     <div className="mb-8">
-      <div className="text-sm font-medium mb-4 text-[#2a2a2a]">ALGORITHM</div>
+      <div className="text-sm font-medium mb-4 text-white/90">ALGORITHM</div>
 
       <select
         value={currentAlgorithm}
         onChange={(e) => setAlgorithm(Number(e.target.value))}
-        className="w-full bg-transparent border border-[#d0cdc4] p-2 text-[#2a2a2a] font-['JetBrains_Mono',monospace] text-sm outline-none cursor-pointer"
+        className="w-full bg-transparent border border-white/10 rounded-xl p-2 text-white/90 font-sans text-sm outline-none cursor-pointer"
       >
         {groupedAlgorithms.map(([category, algos]) => (
           <optgroup key={category} label={category}>
@@ -84,8 +84,8 @@ export default function AlgorithmSelector() {
             return (
               <div key={key} className="mb-5">
                 <div className="flex justify-between mb-2 text-sm">
-                  <span className="text-[#2a2a2a]">{param.label || key}</span>
-                  <span className="text-[#666] font-['JetBrains_Mono',monospace]">
+                  <span className="text-white/90">{param.label || key}</span>
+                  <span className="text-white/55 font-sans">
                     {param.type === 'slider' || (!param.type && param.min !== undefined)
                       ? currentValue?.toFixed(2)
                       : currentValue}
@@ -105,7 +105,7 @@ export default function AlgorithmSelector() {
                         setParam(param.uniformIndex, Number(e.target.value));
                       }
                     }}
-                    className="w-full h-[2px] bg-[#d0cdc4] outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#2a2a2a] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-[#2a2a2a] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer"
+                    className="w-full h-[2px] bg-white/20 outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer"
                   />
                 )}
 
@@ -122,7 +122,7 @@ export default function AlgorithmSelector() {
                         setParam(param.uniformIndex, Number(e.target.value));
                       }
                     }}
-                    className="w-full h-[2px] bg-[#d0cdc4] outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#2a2a2a] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-[#2a2a2a] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer"
+                    className="w-full h-[2px] bg-white/20 outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer"
                   />
                 )}
 
@@ -135,7 +135,7 @@ export default function AlgorithmSelector() {
                         setParam(param.uniformIndex, Number(e.target.value));
                       }
                     }}
-                    className="w-full p-2 bg-[#f5f4f0] border border-[#d0cdc4] text-[#2a2a2a] font-['JetBrains_Mono',monospace] text-xs cursor-pointer outline-none hover:bg-[#e8e7e2] hover:border-[#b8b5ac]"
+                    className="w-full p-2 bg-white/[0.045] border border-white/10 rounded-xl text-white/90 font-sans text-xs cursor-pointer outline-none hover:bg-white/[0.08] hover:border-white/20"
                   >
                     {param.options?.map((opt, idx) => {
                       const value = typeof opt === 'number' ? opt : opt.value;

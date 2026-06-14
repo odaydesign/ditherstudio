@@ -18,11 +18,11 @@ export default function ColorModeSelector() {
 
     return (
         <div className="mb-6">
-            <div className="text-sm font-medium mb-2 text-[#2a2a2a]">COLOR MODE</div>
+            <div className="text-sm font-medium mb-2 text-white/90">COLOR MODE</div>
             <select
                 value={colorMode}
                 onChange={(e) => setColorMode(Number(e.target.value))}
-                className="w-full bg-transparent border border-[#d0cdc4] p-2 text-[#2a2a2a] font-['JetBrains_Mono',monospace] text-sm outline-none cursor-pointer"
+                className="w-full bg-transparent border border-white/10 rounded-xl p-2 text-white/90 font-sans text-sm outline-none cursor-pointer"
             >
                 {COLOR_MODES.map((mode) => (
                     <option key={mode.id} value={mode.id}>

@@ -413,9 +413,9 @@ const GEN_PRESETS: { name: string; apply: () => void }[] = [
 ];
 
 const sliderClass =
-  "w-full h-[2px] bg-[#d0cdc4] outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#2a2a2a] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-[#2a2a2a] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer";
+  "w-full h-[2px] bg-white/20 outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer";
 const selectClass =
-  "w-full p-2 bg-[#e8e5dd] border border-[#d0cdc4] text-xs text-[#2a2a2a] font-['JetBrains_Mono',monospace] cursor-pointer hover:border-[#2a2a2a]";
+  "w-full p-2 bg-white/[0.05] border border-white/10 rounded-xl text-xs text-white/90 font-sans cursor-pointer hover:border-white/40";
 
 function Slider({ label, value, min, max, step, onChange, fmt }: {
   label: string; value: number; min: number; max: number; step: number;
@@ -424,8 +424,8 @@ function Slider({ label, value, min, max, step, onChange, fmt }: {
   return (
     <div>
       <div className="flex justify-between mb-2">
-        <label className="text-xs text-[#666]">{label}</label>
-        <span className="text-xs text-[#2a2a2a] font-mono">{fmt ? fmt(value) : value}</span>
+        <label className="text-xs text-white/55">{label}</label>
+        <span className="text-xs text-white/90 font-mono">{fmt ? fmt(value) : value}</span>
       </div>
       <input
         type="range" min={min} max={max} step={step} value={value}
@@ -439,11 +439,11 @@ function Slider({ label, value, min, max, step, onChange, fmt }: {
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-xs text-[#666]">{label}</span>
+      <span className="text-xs text-white/55">{label}</span>
       <div className="relative w-8 h-8">
         <input type="color" value={value} onChange={(e) => onChange(e.target.value)}
           className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10" />
-        <div className="w-8 h-8 border border-[#d0cdc4]" style={{ backgroundColor: value }} />
+        <div className="w-8 h-8 border border-white/10 rounded-xl" style={{ backgroundColor: value }} />
       </div>
     </div>
   );
@@ -564,13 +564,13 @@ export default function GenerativePanel() {
         <div className="grid grid-cols-2 gap-2 mb-3">
           {GEN_PRESETS.map((p) => (
             <button key={p.name} onClick={p.apply}
-              className="p-2 text-[11px] bg-white border border-[#d0cdc4] text-[#2a2a2a] hover:bg-[#2a2a2a] hover:text-[#e8e5dd] hover:border-[#2a2a2a] transition-colors">
+              className="p-2 text-[11px] bg-white/[0.05] border border-white/10 rounded-xl text-white/80 hover:bg-white hover:text-[#0b0b0d] hover:border-white/40 transition-colors">
               {p.name}
             </button>
           ))}
         </div>
         <button onClick={randomizeGenerative}
-          className="w-full p-2 mb-3 bg-[#2a2a2a] text-[#e8e5dd] text-xs transition-opacity hover:opacity-80">
+          className="w-full p-2 mb-3 bg-white text-[#0b0b0d] text-xs transition-opacity hover:opacity-80">
           ✦ RANDOMIZE BACKGROUND
         </button>
 
@@ -579,20 +579,20 @@ export default function GenerativePanel() {
           <input type="text" value={presetName} onChange={(e) => setPresetName(e.target.value)}
             placeholder="Save current look as…"
             onKeyDown={(e) => { if (e.key === 'Enter') saveUserPreset(); }}
-            className="flex-1 p-2 bg-white text-[#2a2a2a] border border-[#d0cdc4] text-[10px] focus:outline-none focus:border-[#2a2a2a]" />
+            className="flex-1 p-2 bg-white/[0.06] text-white/90 border border-white/10 rounded-xl text-[10px] focus:outline-none focus:border-white/40" />
           <button onClick={saveUserPreset} disabled={!presetName.trim()}
-            className="px-3 bg-[#2a2a2a] text-[#e8e5dd] text-[10px] disabled:opacity-40">SAVE</button>
+            className="px-3 bg-white text-[#0b0b0d] text-[10px] disabled:opacity-40">SAVE</button>
         </div>
         {userPresets.length > 0 && (
           <div className="space-y-1">
             {userPresets.map((p) => (
               <div key={p.name} className="flex items-center gap-2">
                 <button onClick={() => applyUserPreset(p)}
-                  className="flex-1 text-left p-1.5 text-[10px] bg-[#f5f3ee] border border-[#d0cdc4] text-[#2a2a2a] hover:border-[#2a2a2a]">
+                  className="flex-1 text-left p-1.5 text-[10px] bg-white/[0.045] border border-white/10 rounded-xl text-white/90 hover:border-white/40">
                   {p.name}
                 </button>
                 <button onClick={() => persistPresets(userPresets.filter((x) => x.name !== p.name))}
-                  className="text-[#999] hover:text-[#e74c3c] text-sm px-1" title="Delete">×</button>
+                  className="text-white/40 hover:text-[#e74c3c] text-sm px-1" title="Delete">×</button>
               </div>
             ))}
           </div>
@@ -607,7 +607,7 @@ export default function GenerativePanel() {
           {PATTERNS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
         </select>
         <div className="mb-4">
-          <label className="text-xs text-[#666] block mb-2">Render Style</label>
+          <label className="text-xs text-white/55 block mb-2">Render Style</label>
           <select value={generativeRenderStyle}
             onChange={(e) => setGenerativeSetting('generativeRenderStyle', Number(e.target.value))}
             className={selectClass}>
@@ -635,10 +635,10 @@ export default function GenerativePanel() {
               </>
             )}
             <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-xs text-[#666]">Invert (white on black)</span>
+              <span className="text-xs text-white/55">Invert (white on black)</span>
               <input type="checkbox" checked={generativeStyleInvert}
                 onChange={(e) => setGenerativeSetting('generativeStyleInvert', e.target.checked)}
-                className="w-4 h-4 cursor-pointer accent-[#2a2a2a]" />
+                className="w-4 h-4 cursor-pointer accent-white" />
             </label>
           </div>
         )}
@@ -667,7 +667,7 @@ export default function GenerativePanel() {
                 onChange={(v) => setGenerativeSetting('generativeSeed', v)} fmt={(v) => v.toFixed(2)} />
             </div>
             <button onClick={() => setGenerativeSetting('generativeSeed', Math.random() * 10)}
-              className="px-2 py-1 text-sm border border-[#d0cdc4] hover:border-[#2a2a2a]" title="Random seed">🎲</button>
+              className="px-2 py-1 text-sm border border-white/10 rounded-xl hover:border-white/40" title="Random seed">🎲</button>
           </div>
         </div>
       </Collapsible>
@@ -680,14 +680,14 @@ export default function GenerativePanel() {
           <Slider label="Rows" value={generativeGridRows} min={0} max={96} step={1}
             onChange={(v) => setGenerativeSetting('generativeGridRows', v)} fmt={(v) => v === 0 ? 'off' : String(Math.round(v))} />
         </div>
-        <p className="text-[10px] text-[#999] mt-2">0 = off. Coarse columns + fine rows ≈ the grid look. Pairs well with Spectrum.</p>
+        <p className="text-[10px] text-white/40 mt-2">0 = off. Coarse columns + fine rows ≈ the grid look. Pairs well with Spectrum.</p>
       </Collapsible>
 
       {/* SYMMETRY & FRAME */}
       <Collapsible title="SYMMETRY & FRAME" defaultOpen={false}>
         <div className="space-y-4">
           <div>
-            <label className="text-xs text-[#666] block mb-2">Mirror</label>
+            <label className="text-xs text-white/55 block mb-2">Mirror</label>
             <select value={generativeMirror}
               onChange={(e) => setGenerativeSetting('generativeMirror', Number(e.target.value))}
               className={selectClass}>
@@ -699,7 +699,7 @@ export default function GenerativePanel() {
               onChange={(v) => setGenerativeSetting('generativeKaleido', v)} fmt={(v) => String(Math.round(v))} />
           )}
           <div>
-            <label className="text-xs text-[#666] block mb-2">Polar Warp</label>
+            <label className="text-xs text-white/55 block mb-2">Polar Warp</label>
             <select value={generativePolar}
               onChange={(e) => setGenerativeSetting('generativePolar', Number(e.target.value))}
               className={selectClass}>
@@ -731,13 +731,13 @@ export default function GenerativePanel() {
         <div className="flex flex-wrap gap-1 mb-3">
           {BRAND_PALETTES.map((bp) => (
             <button key={bp.name} onClick={() => setGenerativeColors(bp.colors)} title={bp.name}
-              className="flex h-6 w-9 overflow-hidden border border-[#d0cdc4] hover:border-[#2a2a2a]">
+              className="flex h-6 w-9 overflow-hidden border border-white/10 rounded-xl hover:border-white/40">
               {bp.colors.map((c, i) => <span key={i} style={{ backgroundColor: c }} className="flex-1" />)}
             </button>
           ))}
         </div>
         <button onClick={() => extractInputRef.current?.click()}
-          className="w-full p-2 mb-3 text-[10px] bg-transparent border border-[#d0cdc4] text-[#666] hover:border-[#2a2a2a] hover:text-[#2a2a2a]">
+          className="w-full p-2 mb-3 text-[10px] bg-transparent border border-white/10 rounded-xl text-white/55 hover:border-white/40 hover:text-white/90">
           ⤓ EXTRACT PALETTE FROM IMAGE
         </button>
         <input ref={extractInputRef} type="file" accept="image/*" className="hidden" onChange={handleExtractFile} />
@@ -748,18 +748,18 @@ export default function GenerativePanel() {
               <div className="relative w-8 h-8 flex-shrink-0">
                 <input type="color" value={color} onChange={(e) => setGenerativeColor(i, e.target.value)}
                   className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10" />
-                <div className="w-8 h-8 border border-[#d0cdc4]" style={{ backgroundColor: color }} />
+                <div className="w-8 h-8 border border-white/10 rounded-xl" style={{ backgroundColor: color }} />
               </div>
-              <span className="text-[10px] text-[#666] font-mono flex-1">{color.toUpperCase()}</span>
+              <span className="text-[10px] text-white/55 font-mono flex-1">{color.toUpperCase()}</span>
               {generativeColors.length > 2 && (
-                <button onClick={() => removeStop(i)} className="text-[#999] hover:text-[#e74c3c] text-sm px-1" title="Remove stop">×</button>
+                <button onClick={() => removeStop(i)} className="text-white/40 hover:text-[#e74c3c] text-sm px-1" title="Remove stop">×</button>
               )}
             </div>
           ))}
         </div>
         {generativeColors.length < 8 && (
           <button onClick={addStop}
-            className="w-full p-2 mt-2 text-[10px] bg-transparent border border-[#d0cdc4] text-[#666] hover:border-[#2a2a2a] hover:text-[#2a2a2a]">
+            className="w-full p-2 mt-2 text-[10px] bg-transparent border border-white/10 rounded-xl text-white/55 hover:border-white/40 hover:text-white/90">
             + ADD STOP
           </button>
         )}
@@ -769,12 +769,12 @@ export default function GenerativePanel() {
       <Collapsible title="IMAGE LAYER" defaultOpen={false}>
         <div className="flex gap-2 mb-3">
           <button onClick={() => imageLayerInputRef.current?.click()}
-            className="flex-1 p-2 text-[10px] bg-transparent border border-[#d0cdc4] text-[#666] hover:border-[#2a2a2a] hover:text-[#2a2a2a]">
+            className="flex-1 p-2 text-[10px] bg-transparent border border-white/10 rounded-xl text-white/55 hover:border-white/40 hover:text-white/90">
             {generativeImageSrc ? 'REPLACE IMAGE' : '⤓ ADD IMAGE'}
           </button>
           {generativeImageSrc && (
             <button onClick={() => setGenerativeImage(null)}
-              className="px-3 text-[10px] bg-transparent border border-[#d0cdc4] text-[#999] hover:text-[#e74c3c] hover:border-[#e74c3c]">CLEAR</button>
+              className="px-3 text-[10px] bg-transparent border border-white/10 rounded-xl text-white/40 hover:text-[#e74c3c] hover:border-[#e74c3c]">CLEAR</button>
           )}
         </div>
         <input ref={imageLayerInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageLayerFile} />
@@ -782,9 +782,9 @@ export default function GenerativePanel() {
           <div className="space-y-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={generativeImageSrc} alt="layer preview"
-              className="w-full max-h-28 object-contain bg-[#d8d4ca] border border-[#d0cdc4]" />
+              className="w-full max-h-28 object-contain bg-white/[0.06] border border-white/10 rounded-xl" />
             <div>
-              <label className="text-xs text-[#666] block mb-2">Blend mode</label>
+              <label className="text-xs text-white/55 block mb-2">Blend mode</label>
               <select value={imageLayerMode}
                 onChange={(e) => setGenerativeSetting('imageLayerMode', Number(e.target.value))}
                 className={selectClass}>
@@ -801,7 +801,7 @@ export default function GenerativePanel() {
             <Slider label="Amount" value={imageLayerAmount} min={0} max={1} step={0.01}
               onChange={(v) => setGenerativeSetting('imageLayerAmount', v)} fmt={(v) => `${Math.round(v * 100)}%`} />
             <div>
-              <label className="text-xs text-[#666] block mb-2">Fit</label>
+              <label className="text-xs text-white/55 block mb-2">Fit</label>
               <select value={imageLayerFit}
                 onChange={(e) => setGenerativeSetting('imageLayerFit', Number(e.target.value))}
                 className={selectClass}>
@@ -811,25 +811,25 @@ export default function GenerativePanel() {
               </select>
             </div>
             <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-xs text-[#666]">Invert mask / alpha</span>
+              <span className="text-xs text-white/55">Invert mask / alpha</span>
               <input type="checkbox" checked={imageLayerInvert}
                 onChange={(e) => setGenerativeSetting('imageLayerInvert', e.target.checked)}
-                className="w-4 h-4 cursor-pointer accent-[#2a2a2a]" />
+                className="w-4 h-4 cursor-pointer accent-white" />
             </label>
-            <p className="text-[10px] text-[#999]">Composited into the pattern, then dithered together. <b>Alpha</b> = transparent-PNG logo over the pattern. <b>Stencil</b> = pattern shows through the image (use Invert to swap light/dark). Animate &amp; export work as usual.</p>
+            <p className="text-[10px] text-white/40">Composited into the pattern, then dithered together. <b>Alpha</b> = transparent-PNG logo over the pattern. <b>Stencil</b> = pattern shows through the image (use Invert to swap light/dark). Animate &amp; export work as usual.</p>
           </div>
         ) : (
-          <p className="text-[10px] text-[#999]">Drop in a photo or transparent PNG to mask / blend it with the generator pattern — the whole composite then gets dithered.</p>
+          <p className="text-[10px] text-white/40">Drop in a photo or transparent PNG to mask / blend it with the generator pattern — the whole composite then gets dithered.</p>
         )}
       </Collapsible>
 
       {/* MOTION */}
       <Collapsible title="MOTION" defaultOpen={false}>
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-[#666]">Animate</span>
+          <span className="text-xs text-white/55">Animate</span>
           <input type="checkbox" checked={generativeAnimate}
             onChange={(e) => setGenerativeSetting('generativeAnimate', e.target.checked)}
-            className="w-4 h-4 cursor-pointer accent-[#2a2a2a]" />
+            className="w-4 h-4 cursor-pointer accent-white" />
         </div>
         {generativeAnimate && (
           <div className="space-y-4">
@@ -846,7 +846,7 @@ export default function GenerativePanel() {
                 onChange={(v) => setGenerativeSetting('generativeSpeed', v)} fmt={(v) => v.toFixed(2)} />
             )}
             {generativeMotion !== 6 && (
-              <p className="text-[10px] text-[#999]">
+              <p className="text-[10px] text-white/40">
                 Seamless loop ≈ {(6.2831853 / Math.max(generativeSpeed, 0.05)).toFixed(1)}s — set export Duration to this for a perfect loop.
               </p>
             )}
@@ -858,14 +858,14 @@ export default function GenerativePanel() {
       <Collapsible title="TEXT / LOGO" defaultOpen={false} accessory={
         <input type="checkbox" checked={overlayEnabled}
           onChange={(e) => setGenerativeSetting('overlayEnabled', e.target.checked)}
-          className="w-4 h-4 cursor-pointer accent-[#2a2a2a]" />
+          className="w-4 h-4 cursor-pointer accent-white" />
       }>
         {overlayEnabled && (
           <div className="space-y-4">
             <textarea value={overlayText} rows={2}
               onChange={(e) => setGenerativeSetting('overlayText', e.target.value)}
               placeholder="Headline text (Enter for new line)"
-              className="w-full p-2 bg-white text-[#2a2a2a] border border-[#d0cdc4] text-xs focus:outline-none focus:border-[#2a2a2a] resize-none" />
+              className="w-full p-2 bg-white/[0.06] text-white/90 border border-white/10 rounded-xl text-xs focus:outline-none focus:border-white/40 resize-none" />
             <ColorField label="Text Color" value={overlayTextColor}
               onChange={(v) => setGenerativeSetting('overlayTextColor', v)} />
             <Slider label="Text Size" value={overlaySize} min={2} max={20} step={0.5}
@@ -876,12 +876,12 @@ export default function GenerativePanel() {
               onChange={(v) => setGenerativeSetting('overlayY', v)} fmt={(v) => v.toFixed(2)} />
             <div className="flex gap-2">
               <button onClick={() => logoInputRef.current?.click()}
-                className="flex-1 p-2 text-[10px] bg-transparent border border-[#d0cdc4] text-[#666] hover:border-[#2a2a2a] hover:text-[#2a2a2a]">
+                className="flex-1 p-2 text-[10px] bg-transparent border border-white/10 rounded-xl text-white/55 hover:border-white/40 hover:text-white/90">
                 {overlayLogo ? 'REPLACE LOGO' : '⤓ ADD LOGO'}
               </button>
               {overlayLogo && (
                 <button onClick={() => setGenerativeSetting('overlayLogo', '')}
-                  className="px-3 text-[10px] bg-transparent border border-[#d0cdc4] text-[#999] hover:text-[#e74c3c] hover:border-[#e74c3c]">CLEAR</button>
+                  className="px-3 text-[10px] bg-transparent border border-white/10 rounded-xl text-white/40 hover:text-[#e74c3c] hover:border-[#e74c3c]">CLEAR</button>
               )}
             </div>
             <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoFile} />
@@ -902,15 +902,15 @@ export default function GenerativePanel() {
           <div className="flex items-center gap-2">
             <input type="number" min={16} max={7680} value={outputWidth}
               onChange={(e) => setOutputSize(Number(e.target.value), outputHeight, 'custom')}
-              className="w-20 p-2 bg-white text-[#2a2a2a] border border-[#d0cdc4] text-xs focus:outline-none" />
-            <span className="text-xs text-[#666]">×</span>
+              className="w-20 p-2 bg-white/[0.06] text-white/90 border border-white/10 rounded-xl text-xs focus:outline-none" />
+            <span className="text-xs text-white/55">×</span>
             <input type="number" min={16} max={7680} value={outputHeight}
               onChange={(e) => setOutputSize(outputWidth, Number(e.target.value), 'custom')}
-              className="w-20 p-2 bg-white text-[#2a2a2a] border border-[#d0cdc4] text-xs focus:outline-none" />
-            <span className="text-[10px] text-[#999]">px</span>
+              className="w-20 p-2 bg-white/[0.06] text-white/90 border border-white/10 rounded-xl text-xs focus:outline-none" />
+            <span className="text-[10px] text-white/40">px</span>
           </div>
         )}
-        <p className="text-[10px] text-[#999] mt-2">Sets preview size &amp; aspect. Stills &amp; MP4 export at ≥4K of this aspect; GIF exports at this size.</p>
+        <p className="text-[10px] text-white/40 mt-2">Sets preview size &amp; aspect. Stills &amp; MP4 export at ≥4K of this aspect; GIF exports at this size.</p>
       </Collapsible>
     </div>
   );
