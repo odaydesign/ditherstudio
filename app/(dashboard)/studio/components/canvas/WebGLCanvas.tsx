@@ -63,6 +63,56 @@ const getPlaceholderTex = (): THREE.DataTexture => {
   return _placeholderTex;
 };
 
+// ---- 3D source helpers ----
+const build3DGeometry = (shape: number): THREE.BufferGeometry => {
+  switch (shape) {
+    case 1: return new THREE.TorusGeometry(1.0, 0.4, 24, 96);
+    case 2: return new THREE.SphereGeometry(1.25, 64, 48);
+    case 3: return new THREE.BoxGeometry(1.6, 1.6, 1.6);
+    case 4: return new THREE.IcosahedronGeometry(1.4, 0);
+    case 5: return new THREE.ConeGeometry(1.1, 2.0, 64);
+    case 6: return new THREE.CylinderGeometry(0.95, 0.95, 1.9, 64);
+    case 7: return new THREE.DodecahedronGeometry(1.4, 0);
+    default: return new THREE.TorusKnotGeometry(0.85, 0.3, 200, 32);
+  }
+};
+
+let _matcap3D: THREE.CanvasTexture | null = null;
+const make3DMatcap = (): THREE.Texture => {
+  if (_matcap3D) return _matcap3D;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d')!;
+  x.fillStyle = '#16140f'; x.fillRect(0, 0, 256, 256);
+  const g = x.createRadialGradient(96, 84, 16, 128, 128, 150);
+  g.addColorStop(0, '#ffffff'); g.addColorStop(0.5, '#b7b0a0'); g.addColorStop(1, '#1c1a16');
+  x.fillStyle = g; x.beginPath(); x.arc(128, 128, 128, 0, Math.PI * 2); x.fill();
+  _matcap3D = new THREE.CanvasTexture(c);
+  return _matcap3D;
+};
+
+// Build a 3D material for the chosen shading mode, with optional PS1 vertex snapping.
+const build3DMaterial = (mode: number, color: string, vertexSnap: number): THREE.Material => {
+  let mat: THREE.Material;
+  if (mode === 1) mat = new THREE.MeshToonMaterial({ color });
+  else if (mode === 2) mat = new THREE.MeshNormalMaterial();
+  else if (mode === 3) mat = new THREE.MeshMatcapMaterial({ matcap: make3DMatcap() });
+  else if (mode === 4) mat = new THREE.MeshDepthMaterial();
+  else if (mode === 5) mat = new THREE.MeshStandardMaterial({ color, wireframe: true });
+  else mat = new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.0 });
+  if (vertexSnap > 0.0) {
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uSnap = { value: vertexSnap };
+      shader.vertexShader = 'uniform float uSnap;\n' + shader.vertexShader.replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
+         { float grid = mix(300.0, 26.0, clamp(uSnap, 0.0, 1.0));
+           gl_Position.xy = floor(gl_Position.xy / gl_Position.w * grid) / grid * gl_Position.w; }`
+      );
+    };
+  }
+  return mat;
+};
+
 // Build a horizontal glyph atlas (white glyphs on transparent) for ASCII text mode.
 // One square cell per character; the shader picks a glyph per source cell by luminance.
 const buildAsciiAtlas = (chars: string): { tex: THREE.CanvasTexture; count: number } => {
@@ -108,6 +158,10 @@ export default function WebGLCanvas() {
   const generatorTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
   const generatorDirtyRef = useRef(true);
   const generativeImageTexRef = useRef<THREE.Texture | null>(null); // optional image-layer texture
+  // Real 3D scene source (rendered into the source target, then dithered)
+  const scene3DRef = useRef<THREE.Scene | null>(null);
+  const camera3DRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const mesh3DRef = useRef<THREE.Mesh | null>(null);
   // Text / logo overlay (composited into the same canvas so it exports)
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayTextureRef = useRef<THREE.CanvasTexture | null>(null);
@@ -409,6 +463,35 @@ export default function WebGLCanvas() {
   }, []);
 
   // Animation loop
+  // Render the 3D scene into the source target (tDiffuse). Target dims derive from
+  // the renderer drawing buffer / lowRes, so PS1 low-res works live AND on export.
+  const render3DPrePass = useCallback((uTimeSeconds: number) => {
+    const renderer = rendererRef.current;
+    const scn = scene3DRef.current;
+    const cam = camera3DRef.current;
+    const tgt = generatorTargetRef.current;
+    if (!renderer || !scn || !cam || !tgt || !mesh3DRef.current) return;
+    const s = useDitherStore.getState();
+    const lowRes = Math.max(1, Math.round(s.object3DLowRes));
+    const rw = renderer.domElement.width, rh = renderer.domElement.height;
+    const tw = Math.max(2, Math.round(rw / lowRes)), th = Math.max(2, Math.round(rh / lowRes));
+    if (tgt.width !== tw || tgt.height !== th) {
+      tgt.setSize(tw, th);
+      const f = lowRes > 1 ? THREE.NearestFilter : THREE.LinearFilter;
+      tgt.texture.minFilter = f; tgt.texture.magFilter = f; tgt.texture.needsUpdate = true;
+    }
+    if (cam.fov !== s.object3DFov) { cam.fov = s.object3DFov; cam.updateProjectionMatrix(); }
+    const aspect = rw / Math.max(rh, 1);
+    if (Math.abs(cam.aspect - aspect) > 1e-4) { cam.aspect = aspect; cam.updateProjectionMatrix(); }
+    cam.position.set(0, 0, s.object3DDistance);
+    cam.lookAt(0, 0, 0);
+    const auto = s.object3DAutoRotate ? uTimeSeconds * s.object3DAutoSpeed : 0;
+    mesh3DRef.current.rotation.set(s.object3DRotateX, s.object3DRotateY + auto, 0);
+    renderer.setRenderTarget(tgt);
+    renderer.render(scn, cam);
+    renderer.setRenderTarget(null);
+  }, []);
+
   const animate = useCallback(() => {
     if (!sceneRef.current || !cameraRef.current || !rendererRef.current || !materialRef.current) {
       return;
@@ -432,7 +515,9 @@ export default function WebGLCanvas() {
     // Generative pre-pass: render the abstract pattern into the target, which the
     // main material samples as tDiffuse. Skipped when paused and nothing changed.
     const genState = useDitherStore.getState();
-    if (
+    if (genState.is3D) {
+      render3DPrePass(performance.now() * 0.001);
+    } else if (
       genState.isGenerative &&
       generatorSceneRef.current &&
       generatorMaterialRef.current &&
@@ -461,7 +546,7 @@ export default function WebGLCanvas() {
     }
 
     animationFrameRef.current = requestAnimationFrame(animate);
-  }, []);
+  }, [render3DPrePass]);
 
   // Render ONE deterministic frame with time forced to `uTimeSeconds`. Used by the
   // exporter to produce seamless loops (frame i at phase 2π·i/N) at any FPS.
@@ -471,18 +556,23 @@ export default function WebGLCanvas() {
     const cam = cameraRef.current;
     if (!renderer || !scene || !cam) return;
 
-    const genMat = generatorMaterialRef.current;
-    if (genMat && generatorSceneRef.current && generatorTargetRef.current) {
-      genMat.uniforms.uTime.value = uTimeSeconds;
-      // respect the real state so an fx-only export keeps a static generator
-      genMat.uniforms.uAnimate.value = useDitherStore.getState().generativeAnimate ? 1 : 0;
-      renderer.setRenderTarget(generatorTargetRef.current);
-      renderer.render(generatorSceneRef.current, cam);
-      renderer.setRenderTarget(null);
+    const s = useDitherStore.getState();
+    if (s.is3D) {
+      render3DPrePass(uTimeSeconds);
+    } else {
+      const genMat = generatorMaterialRef.current;
+      if (genMat && generatorSceneRef.current && generatorTargetRef.current) {
+        genMat.uniforms.uTime.value = uTimeSeconds;
+        // respect the real state so an fx-only export keeps a static generator
+        genMat.uniforms.uAnimate.value = s.generativeAnimate ? 1 : 0;
+        renderer.setRenderTarget(generatorTargetRef.current);
+        renderer.render(generatorSceneRef.current, cam);
+        renderer.setRenderTarget(null);
+      }
     }
     if (materialRef.current) materialRef.current.uniforms.uTime.value = uTimeSeconds;
     renderer.render(scene, cam);
-  }, []);
+  }, [render3DPrePass]);
 
   const startAnimation = useCallback(() => {
     if (animationFrameRef.current) {
@@ -538,6 +628,60 @@ export default function WebGLCanvas() {
     generatorDirtyRef.current = true;
     startAnimation();
   }, [createGeneratorMaterial, createMaterial, startAnimation]);
+
+  // Rebuild the 3D mesh geometry/material + background (on shape/material/etc change).
+  const rebuild3D = useCallback(() => {
+    const scn = scene3DRef.current;
+    const mesh = mesh3DRef.current;
+    if (!scn || !mesh) return;
+    const s = useDitherStore.getState();
+    scn.background = new THREE.Color(s.object3DBg);
+    const oldGeo = mesh.geometry;
+    mesh.geometry = build3DGeometry(s.object3DShape);
+    oldGeo.dispose();
+    const oldMat = mesh.material as THREE.Material;
+    mesh.material = build3DMaterial(s.object3DMaterial, s.object3DColor, s.object3DVertexSnap);
+    oldMat.dispose();
+    generatorDirtyRef.current = true;
+  }, []);
+
+  // Initialize / resize the 3D source (no uploaded file required)
+  const init3D = useCallback(() => {
+    if (!sceneRef.current || !rendererRef.current) return;
+    const s = useDitherStore.getState();
+    const w = s.outputWidth, h = s.outputHeight;
+    rendererRef.current.setSize(w, h);
+    if (!generatorTargetRef.current) {
+      generatorTargetRef.current = new THREE.WebGLRenderTarget(w, h, {
+        minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+      });
+    }
+    if (!scene3DRef.current) scene3DRef.current = new THREE.Scene();
+    const scn = scene3DRef.current;
+    scn.background = new THREE.Color(s.object3DBg);
+    if (!camera3DRef.current) camera3DRef.current = new THREE.PerspectiveCamera(s.object3DFov, w / h, 0.1, 100);
+    if (!scn.getObjectByName('key3d')) {
+      const key = new THREE.DirectionalLight(0xffffff, 2.6); key.name = 'key3d'; key.position.set(3, 4, 5); scn.add(key);
+      const fill = new THREE.DirectionalLight(0xffffff, 0.7); fill.name = 'fill3d'; fill.position.set(-4, -1, 2); scn.add(fill);
+      const amb = new THREE.AmbientLight(0xffffff, 0.25); amb.name = 'amb3d'; scn.add(amb);
+    }
+    if (!mesh3DRef.current) {
+      const mesh = new THREE.Mesh(build3DGeometry(s.object3DShape), build3DMaterial(s.object3DMaterial, s.object3DColor, s.object3DVertexSnap));
+      mesh.name = 'obj3d'; mesh3DRef.current = mesh; scn.add(mesh);
+    } else {
+      rebuild3D();
+    }
+    // Main material samples the source target as tDiffuse
+    const mainMaterial = createMaterial(generatorTargetRef.current.texture, w, h);
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    if (meshRef.current) { sceneRef.current.remove(meshRef.current); meshRef.current.geometry.dispose(); }
+    const quad = new THREE.Mesh(geometry, mainMaterial);
+    meshRef.current = quad; sceneRef.current.add(quad);
+    setResolution({ width: w, height: h });
+    setHasImage(true);
+    generatorDirtyRef.current = true;
+    startAnimation();
+  }, [createMaterial, startAnimation, rebuild3D]);
 
   // Load image file
   const loadImage = useCallback((file: File) => {
@@ -782,13 +926,31 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isGenerative) {
       initGenerative();
-    } else if (!useDitherStore.getState().currentFile) {
-      // Left generative mode with no file loaded → stop the loop, show the prompt
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().is3D) {
+      // Left generative mode with no file/3D loaded → stop the loop, show the prompt
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ditherState.isGenerative, ditherState.outputWidth, ditherState.outputHeight, initGenerative]);
+
+  // Enable / resize / tear down the 3D source
+  useEffect(() => {
+    if (ditherState.is3D) {
+      init3D();
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative) {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      setHasImage(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ditherState.is3D, ditherState.outputWidth, ditherState.outputHeight, init3D]);
+
+  // Rebuild the 3D mesh / material when its appearance changes
+  useEffect(() => {
+    if (ditherState.is3D) rebuild3D();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ditherState.object3DShape, ditherState.object3DMaterial, ditherState.object3DColor,
+      ditherState.object3DBg, ditherState.object3DLowRes, ditherState.object3DVertexSnap]);
 
   // Live-update generator uniforms as generative settings change (independent of
   // the dither palette, which is driven by the main uniform-update effect below)
@@ -1029,17 +1191,21 @@ export default function WebGLCanvas() {
     const cam = cameraRef.current;
     if (!renderer || !scene || !cam) return;
     const s = useDitherStore.getState();
-    const genMat = generatorMaterialRef.current;
-    if (genMat && generatorSceneRef.current && generatorTargetRef.current) {
-      genMat.uniforms.uTime.value = performance.now() * 0.001;
-      genMat.uniforms.uAnimate.value = s.generativeAnimate ? 1 : 0;
-      renderer.setRenderTarget(generatorTargetRef.current);
-      renderer.render(generatorSceneRef.current, cam);
-      renderer.setRenderTarget(null);
+    if (s.is3D) {
+      render3DPrePass(performance.now() * 0.001);
+    } else {
+      const genMat = generatorMaterialRef.current;
+      if (genMat && generatorSceneRef.current && generatorTargetRef.current) {
+        genMat.uniforms.uTime.value = performance.now() * 0.001;
+        genMat.uniforms.uAnimate.value = s.generativeAnimate ? 1 : 0;
+        renderer.setRenderTarget(generatorTargetRef.current);
+        renderer.render(generatorSceneRef.current, cam);
+        renderer.setRenderTarget(null);
+      }
     }
     if (materialRef.current) materialRef.current.uniforms.uTime.value = performance.now() * 0.001;
     renderer.render(scene, cam);
-  }, []);
+  }, [render3DPrePass]);
 
   useEffect(() => {
     generatorExport.renderExportFrame = renderExportFrame;

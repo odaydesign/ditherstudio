@@ -8,6 +8,19 @@ export interface DitherState {
   isWebcam: boolean;
   videoDuration: number; // Duration of loaded video in seconds
   isGenerative: boolean; // Procedural generative-background source
+  is3D: boolean; // Real 3D scene source (rendered then dithered)
+  object3DShape: number; // 0 torusKnot,1 torus,2 sphere,3 box,4 ico,5 cone,6 cylinder,7 dodeca
+  object3DMaterial: number; // 0 lit,1 toon,2 normal,3 matcap,4 depth,5 wireframe
+  object3DColor: string; // base colour (lit/toon/wireframe)
+  object3DBg: string; // scene background colour
+  object3DAutoRotate: boolean;
+  object3DAutoSpeed: number;
+  object3DRotateX: number; // radians offset
+  object3DRotateY: number; // radians offset
+  object3DDistance: number; // camera distance
+  object3DFov: number; // camera field of view
+  object3DLowRes: number; // 1 = off, 2-6 = PS1 low-res divisor
+  object3DVertexSnap: number; // 0 = off, >0 PS1 vertex-snap grid strength
 
   // Output canvas size (used by generative mode for presentation export)
   outputWidth: number;
@@ -225,6 +238,7 @@ export interface DitherState {
 
   // Generative background actions
   setGenerativeEnabled: (enabled: boolean) => void;
+  setThreeDEnabled: (enabled: boolean) => void;
   setGenerativeSetting: (key: string, value: number | boolean | string) => void;
   setGenerativeColors: (colors: string[]) => void;
   setGenerativeColor: (index: number, color: string) => void;
@@ -240,6 +254,19 @@ const defaultState = {
   isWebcam: false,
   videoDuration: 0,
   isGenerative: false,
+  is3D: false,
+  object3DShape: 0,
+  object3DMaterial: 0,
+  object3DColor: '#e8e2d0',
+  object3DBg: '#0a0a0a',
+  object3DAutoRotate: true,
+  object3DAutoSpeed: 1.0,
+  object3DRotateX: 0.5,
+  object3DRotateY: 0.0,
+  object3DDistance: 3.4,
+  object3DFov: 45,
+  object3DLowRes: 1,
+  object3DVertexSnap: 0,
 
   // Output canvas size
   outputWidth: 1920,
@@ -426,7 +453,7 @@ export const useDitherStore = create<DitherState>((set) => ({
 
   setFile: (file, isVideo) => set({ ...defaultState, currentFile: file, isVideo }),
 
-  setWebcam: (enabled) => set(enabled ? { isWebcam: true, isGenerative: false } : { isWebcam: false }),
+  setWebcam: (enabled) => set(enabled ? { isWebcam: true, isGenerative: false, is3D: false } : { isWebcam: false }),
 
   setVideoDuration: (duration) => set({ videoDuration: duration }),
 
@@ -459,6 +486,19 @@ export const useDitherStore = create<DitherState>((set) => ({
     // Preserve the active source + generative config so RESET ALL only
     // resets dither/colour/fx params, not your generated background.
     isGenerative: state.isGenerative,
+    is3D: state.is3D,
+    object3DShape: state.object3DShape,
+    object3DMaterial: state.object3DMaterial,
+    object3DColor: state.object3DColor,
+    object3DBg: state.object3DBg,
+    object3DAutoRotate: state.object3DAutoRotate,
+    object3DAutoSpeed: state.object3DAutoSpeed,
+    object3DRotateX: state.object3DRotateX,
+    object3DRotateY: state.object3DRotateY,
+    object3DDistance: state.object3DDistance,
+    object3DFov: state.object3DFov,
+    object3DLowRes: state.object3DLowRes,
+    object3DVertexSnap: state.object3DVertexSnap,
     outputWidth: state.outputWidth,
     outputHeight: state.outputHeight,
     outputAspect: state.outputAspect,
@@ -528,8 +568,13 @@ export const useDitherStore = create<DitherState>((set) => ({
       // Tasteful baseline so a bare GENERATE looks good: full colour (not the
       // app's B&W duotone) with enough levels to keep the gradient smooth.
       // Presets can still override colour mode / levels.
-      ? { isGenerative: true, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { isGenerative: true, is3D: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
       : { isGenerative: false }),
+
+  setThreeDEnabled: (enabled) =>
+    set(enabled
+      ? { is3D: true, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      : { is3D: false }),
 
   setGenerativeSetting: (key, value) => set({ [key]: value } as any),
 
