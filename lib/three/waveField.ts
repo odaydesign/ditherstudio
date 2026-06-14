@@ -5,27 +5,26 @@ import * as THREE from 'three';
  * with fine contour lines, a blue→red gradient, fresnel rim glow and distance fog.
  *
  * Seamless loop: every time-dependent term in the height field is an INTEGER
- * harmonic of the loop phase (2π·k·p), so the field is identical at p=0 and p=1.
- * Drive it with update(elapsedSeconds) and the motion repeats exactly every
- * WAVE_LOOP_SECONDS with no visible seam.
+ * harmonic of the phase (k·uPhase, uPhase in radians), so the field is identical
+ * whenever uPhase advances by 2π. The studio drives uPhase = t·speed (matching
+ * the generator/3D loop convention, period = 2π/speed); the standalone preview
+ * drives it via update() so the motion repeats every WAVE_LOOP_SECONDS.
  */
 
 export const WAVE_LOOP_SECONDS = 14;
 
 const vertexShader = /* glsl */ `
-  uniform float uPhase;   // loop phase 0..1
+  uniform float uPhase;   // loop phase, radians (one full loop every 2π)
   uniform float uScale;   // spatial frequency of the field
   uniform float uAmp;     // height amplitude
 
   varying vec3 vWorldPos;
   varying float vHeight;   // normalised height (~ -2.8 .. 2.8)
 
-  const float TAU = 6.28318530718;
-
-  // Sum of travelling waves. Each time term is an integer multiple of (uPhase*TAU)
-  // → the whole field loops perfectly at uPhase = 1.
+  // Sum of travelling waves. Each time term is an integer multiple of uPhase
+  // → the whole field loops perfectly whenever uPhase advances by 2π.
   float waves(vec2 p) {
-    float t = uPhase * TAU;
+    float t = uPhase;
     float h = 0.0;
     h += 1.10 * sin(p.x * 0.45 + p.y * 0.20 + t);
     h += 0.80 * sin(p.x * 0.30 - p.y * 0.55 + t + 1.3);
@@ -149,7 +148,8 @@ export function createWaveField(): WaveField {
     mesh,
     material,
     update: (t: number) => {
-      material.uniforms.uPhase.value = (t % WAVE_LOOP_SECONDS) / WAVE_LOOP_SECONDS;
+      material.uniforms.uPhase.value =
+        ((t % WAVE_LOOP_SECONDS) / WAVE_LOOP_SECONDS) * Math.PI * 2;
     },
     dispose: () => {
       geometry.dispose();

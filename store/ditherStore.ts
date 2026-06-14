@@ -22,6 +22,23 @@ export interface DitherState {
   object3DLowRes: number; // 1 = off, 2-6 = PS1 low-res divisor
   object3DVertexSnap: number; // 0 = off, >0 PS1 vertex-snap grid strength
 
+  // Wave Field source — flowing displaced terrain (rendered then dithered)
+  isWaveField: boolean;
+  waveScale: number; // spatial frequency of the field
+  waveAmp: number; // height amplitude
+  waveLineCount: number; // contour lines per world unit
+  waveLineStrength: number; // 0..1 grain contrast
+  waveSpeed: number; // phase speed (loop period = 2π/speed seconds)
+  waveGradient: number; // blue→red gradient slope across width
+  waveColorLow: string; // deep colour (left)
+  waveColorMid: string; // crest highlight
+  waveColorHigh: string; // accent colour (right)
+  waveColorFog: string; // distance-fog / horizon colour
+  waveBg: string; // scene background
+  waveCamHeight: number; // camera height (grazing angle)
+  waveCamDistance: number; // camera distance
+  waveFov: number; // camera field of view
+
   // Output canvas size (used by generative mode for presentation export)
   outputWidth: number;
   outputHeight: number;
@@ -239,6 +256,7 @@ export interface DitherState {
   // Generative background actions
   setGenerativeEnabled: (enabled: boolean) => void;
   setThreeDEnabled: (enabled: boolean) => void;
+  setWaveFieldEnabled: (enabled: boolean) => void;
   setGenerativeSetting: (key: string, value: number | boolean | string) => void;
   setGenerativeColors: (colors: string[]) => void;
   setGenerativeColor: (index: number, color: string) => void;
@@ -267,6 +285,23 @@ const defaultState = {
   object3DFov: 45,
   object3DLowRes: 1,
   object3DVertexSnap: 0,
+
+  // Wave Field source
+  isWaveField: false,
+  waveScale: 0.15,
+  waveAmp: 2.3,
+  waveLineCount: 1.3,
+  waveLineStrength: 0.42,
+  waveSpeed: 0.45,
+  waveGradient: 0.011,
+  waveColorLow: '#1b46e0',
+  waveColorMid: '#cfeeff',
+  waveColorHigh: '#ff3b6b',
+  waveColorFog: '#03141a',
+  waveBg: '#04080c',
+  waveCamHeight: 8,
+  waveCamDistance: 36,
+  waveFov: 42,
 
   // Output canvas size
   outputWidth: 1920,
@@ -453,7 +488,7 @@ export const useDitherStore = create<DitherState>((set) => ({
 
   setFile: (file, isVideo) => set({ ...defaultState, currentFile: file, isVideo }),
 
-  setWebcam: (enabled) => set(enabled ? { isWebcam: true, isGenerative: false, is3D: false } : { isWebcam: false }),
+  setWebcam: (enabled) => set(enabled ? { isWebcam: true, isGenerative: false, is3D: false, isWaveField: false } : { isWebcam: false }),
 
   setVideoDuration: (duration) => set({ videoDuration: duration }),
 
@@ -499,6 +534,21 @@ export const useDitherStore = create<DitherState>((set) => ({
     object3DFov: state.object3DFov,
     object3DLowRes: state.object3DLowRes,
     object3DVertexSnap: state.object3DVertexSnap,
+    isWaveField: state.isWaveField,
+    waveScale: state.waveScale,
+    waveAmp: state.waveAmp,
+    waveLineCount: state.waveLineCount,
+    waveLineStrength: state.waveLineStrength,
+    waveSpeed: state.waveSpeed,
+    waveGradient: state.waveGradient,
+    waveColorLow: state.waveColorLow,
+    waveColorMid: state.waveColorMid,
+    waveColorHigh: state.waveColorHigh,
+    waveColorFog: state.waveColorFog,
+    waveBg: state.waveBg,
+    waveCamHeight: state.waveCamHeight,
+    waveCamDistance: state.waveCamDistance,
+    waveFov: state.waveFov,
     outputWidth: state.outputWidth,
     outputHeight: state.outputHeight,
     outputAspect: state.outputAspect,
@@ -568,13 +618,18 @@ export const useDitherStore = create<DitherState>((set) => ({
       // Tasteful baseline so a bare GENERATE looks good: full colour (not the
       // app's B&W duotone) with enough levels to keep the gradient smooth.
       // Presets can still override colour mode / levels.
-      ? { isGenerative: true, is3D: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { isGenerative: true, is3D: false, isWaveField: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
       : { isGenerative: false }),
 
   setThreeDEnabled: (enabled) =>
     set(enabled
-      ? { is3D: true, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { is3D: true, isGenerative: false, isWaveField: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
       : { is3D: false }),
+
+  setWaveFieldEnabled: (enabled) =>
+    set(enabled
+      ? { isWaveField: true, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      : { isWaveField: false }),
 
   setGenerativeSetting: (key, value) => set({ [key]: value } as any),
 

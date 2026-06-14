@@ -6,6 +6,7 @@ import { paletteCategories, getPaletteById } from '@/lib/palettes/retroPalettes'
 import { algorithms } from '@/lib/three/algorithms';
 import GenerativePanel from './GenerativePanel';
 import Object3DPanel from './Object3DPanel';
+import WaveFieldPanel from './WaveFieldPanel';
 import { Collapsible } from './Collapsible';
 
 const PRESET_PALETTES = [
@@ -191,6 +192,7 @@ export default function SimplifiedSettings() {
     // Generative source (toggle lives in column 1 /SOURCE)
     isGenerative,
     is3D,
+    isWaveField,
   } = useDitherStore();
 
   const [selectedRetroPreset, setSelectedRetroPreset] = useState<string | null>(null);
@@ -246,6 +248,7 @@ export default function SimplifiedSettings() {
       {/* Generative controls (when GENERATE source is active; toggle lives in column 1 /SOURCE) */}
       {isGenerative && <GenerativePanel />}
       {is3D && <Object3DPanel />}
+      {isWaveField && <WaveFieldPanel />}
 
       {/* ============================================ */}
       {/* SECTION 1: SOURCE IMAGE */}

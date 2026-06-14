@@ -466,7 +466,7 @@ export default function DitherStudio() {
   const exportDims = useCallback((): { w: number; h: number } => {
     const s = useDitherStore.getState();
     const c = document.querySelector('canvas');
-    if (!s.isGenerative && !s.is3D) return { w: c?.width || s.outputWidth, h: c?.height || s.outputHeight };
+    if (!s.isGenerative && !s.is3D && !s.isWaveField) return { w: c?.width || s.outputWidth, h: c?.height || s.outputHeight };
     let w = s.outputWidth, h = s.outputHeight;
     const MIN_LONG = 3840; // 4K long edge
     const long = Math.max(w, h);
@@ -487,8 +487,8 @@ export default function DitherStudio() {
       after?.();
     }, mimeType, quality);
 
-    // Generative / 3D stills render at >= 4K via a temporary hi-res pass.
-    if ((s.isGenerative || s.is3D) && generatorExport.beginExport && generatorExport.renderStillFrame) {
+    // Generative / 3D / wave stills render at >= 4K via a temporary hi-res pass.
+    if ((s.isGenerative || s.is3D || s.isWaveField) && generatorExport.beginExport && generatorExport.renderStillFrame) {
       const { w, h } = exportDims();
       generatorExport.beginExport(w, h);
       generatorExport.renderStillFrame();
@@ -627,11 +627,14 @@ export default function DitherStudio() {
     // 3D auto-rotate loops seamlessly: rotation.y = t * speed, so over one period
     // (2π/speed) it completes a full turn.
     const threeDAnim = s.is3D && s.object3DAutoRotate;
+    // Wave field always loops: uPhase = t * waveSpeed (radians), period 2π/speed.
+    const waveAnim = s.isWaveField;
     // Smooth analog motion (wobble / hum bar) also benefits from a seamless loop;
     // it's phase-locked to this same speed via uAnalogRate (fallback 0.5).
     const analogAnim = s.analogWobble > 0 || s.analogHum > 0;
     const speed = genAnim ? s.generativeSpeed
       : threeDAnim ? s.object3DAutoSpeed
+      : waveAnim ? s.waveSpeed
       : (s.fxAnimate ? s.fxSpeed : (analogAnim ? 0.5 : 0));
     if (speed <= 0) return null;
     const period = (2 * Math.PI) / Math.max(speed, 0.05); // seconds per cycle
@@ -802,7 +805,7 @@ export default function DitherStudio() {
     // deterministic frames -> 4K MP4 (no end-freeze).
     const gs = useDitherStore.getState();
     const analogAnim = gs.analogWobble > 0 || gs.analogHum > 0 || gs.analogStatic > 0 || gs.analogGhost > 0;
-    if ((gs.isGenerative && gs.generativeAnimate) || (gs.is3D && gs.object3DAutoRotate) || gs.fxAnimate || analogAnim) {
+    if ((gs.isGenerative && gs.generativeAnimate) || (gs.is3D && gs.object3DAutoRotate) || gs.isWaveField || gs.fxAnimate || analogAnim) {
       const loop = getLoopPlan();
       const fps = exportFps;
       const frames = loop ? loop.frames : Math.max(1, Math.round(exportDuration * fps));
@@ -913,11 +916,11 @@ export default function DitherStudio() {
         <div className="mb-8" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <div className="text-sm text-[#666] mb-2">/SOURCE</div>
 
-          {/* Upload / Generate / 3D source toggle (single source of truth) */}
-          <div className="grid grid-cols-3 gap-2 mb-3">
+          {/* Upload / Generate / 3D / Waves source toggle (single source of truth) */}
+          <div className="grid grid-cols-4 gap-2 mb-3">
             <button
-              onClick={() => { const st = useDitherStore.getState(); st.setThreeDEnabled(false); st.setGenerativeEnabled(false); }}
-              className={`p-2 text-xs border transition-colors ${!ditherState.isGenerative && !ditherState.is3D ? 'bg-[#2a2a2a] text-[#e8e5dd] border-[#2a2a2a]' : 'bg-transparent text-[#666] border-[#d0cdc4] hover:border-[#2a2a2a]'}`}
+              onClick={() => { const st = useDitherStore.getState(); st.setThreeDEnabled(false); st.setGenerativeEnabled(false); st.setWaveFieldEnabled(false); }}
+              className={`p-2 text-xs border transition-colors ${!ditherState.isGenerative && !ditherState.is3D && !ditherState.isWaveField ? 'bg-[#2a2a2a] text-[#e8e5dd] border-[#2a2a2a]' : 'bg-transparent text-[#666] border-[#d0cdc4] hover:border-[#2a2a2a]'}`}
             >
               UPLOAD
             </button>
@@ -933,9 +936,19 @@ export default function DitherStudio() {
             >
               3D
             </button>
+            <button
+              onClick={() => useDitherStore.getState().setWaveFieldEnabled(true)}
+              className={`p-2 text-xs border transition-colors ${ditherState.isWaveField ? 'bg-[#2a2a2a] text-[#e8e5dd] border-[#2a2a2a]' : 'bg-transparent text-[#666] border-[#d0cdc4] hover:border-[#2a2a2a]'}`}
+            >
+              WAVES
+            </button>
           </div>
 
-          {ditherState.is3D ? (
+          {ditherState.isWaveField ? (
+            <div className="p-3 bg-[#f5f3ee] border border-[#d0cdc4] text-[10px] text-[#666] leading-relaxed">
+              ∿ Flowing wave field — tune the look, colours, camera &amp; loop speed in the controls panel, then dither it. Animates + exports as a seamless loop.
+            </div>
+          ) : ditherState.is3D ? (
             <div className="p-3 bg-[#f5f3ee] border border-[#d0cdc4] text-[10px] text-[#666] leading-relaxed">
               ▣ Rendering a 3D object — pick the shape, material, camera &amp; PS1 look in the controls panel, then dither it.
             </div>
@@ -1176,7 +1189,7 @@ export default function DitherStudio() {
                   />
                 </div>
 
-                {(((ditherState.isGenerative && ditherState.generativeAnimate) || (ditherState.is3D && ditherState.object3DAutoRotate) || ditherState.fxAnimate || ditherState.analogWobble > 0 || ditherState.analogHum > 0)) && (
+                {(((ditherState.isGenerative && ditherState.generativeAnimate) || (ditherState.is3D && ditherState.object3DAutoRotate) || ditherState.isWaveField || ditherState.fxAnimate || ditherState.analogWobble > 0 || ditherState.analogHum > 0)) && (
                   <label className="flex items-center gap-2 mb-2 cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -1189,8 +1202,9 @@ export default function DitherStudio() {
                       {(() => {
                         const genAnim = ditherState.isGenerative && ditherState.generativeAnimate && ditherState.generativeMotion !== 6;
                         const threeDAnim = ditherState.is3D && ditherState.object3DAutoRotate;
+                        const waveAnim = ditherState.isWaveField;
                         const analogAnim = ditherState.analogWobble > 0 || ditherState.analogHum > 0;
-                        const speed = genAnim ? ditherState.generativeSpeed : threeDAnim ? ditherState.object3DAutoSpeed : (ditherState.fxAnimate ? ditherState.fxSpeed : (analogAnim ? 0.5 : 0));
+                        const speed = genAnim ? ditherState.generativeSpeed : threeDAnim ? ditherState.object3DAutoSpeed : waveAnim ? ditherState.waveSpeed : (ditherState.fxAnimate ? ditherState.fxSpeed : (analogAnim ? 0.5 : 0));
                         if (!loopExport || speed <= 0) return '';
                         const period = (2 * Math.PI) / Math.max(speed, 0.05);
                         const cycles = Math.max(1, Math.round(exportDuration / period));

@@ -7,6 +7,7 @@ import { vertexShader } from '@/lib/three/shaders/vertexShader';
 import { fragmentShader } from '@/lib/three/shaders/fragmentShader';
 import { generatorShader } from '@/lib/three/shaders/generatorShader';
 import { generatorExport } from '@/lib/three/generatorController';
+import { createWaveField, type WaveField } from '@/lib/three/waveField';
 
 // The fragment shader declares `uniform vec3 uPaletteColors[16]` — a fixed-size
 // array. Three.js uploads all 16 slots and calls .toArray() on each element, so
@@ -162,6 +163,9 @@ export default function WebGLCanvas() {
   const scene3DRef = useRef<THREE.Scene | null>(null);
   const camera3DRef = useRef<THREE.PerspectiveCamera | null>(null);
   const mesh3DRef = useRef<THREE.Mesh | null>(null);
+  const sceneWaveRef = useRef<THREE.Scene | null>(null);
+  const cameraWaveRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const waveRef = useRef<WaveField | null>(null);
   // Text / logo overlay (composited into the same canvas so it exports)
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayTextureRef = useRef<THREE.CanvasTexture | null>(null);
@@ -220,6 +224,7 @@ export default function WebGLCanvas() {
       generatorTargetRef.current?.dispose();
       generatorMaterialRef.current?.dispose();
       generatorMeshRef.current?.geometry.dispose();
+      waveRef.current?.dispose();
     };
   }, []);
 
@@ -492,6 +497,34 @@ export default function WebGLCanvas() {
     renderer.setRenderTarget(null);
   }, []);
 
+  // Render the wave-field scene into the source target (tDiffuse), full-res.
+  // uPhase = t·speed (radians) → the field loops every 2π/speed seconds, which the
+  // exporter spans exactly for a seamless loop.
+  const renderWavePrePass = useCallback((uTimeSeconds: number) => {
+    const renderer = rendererRef.current;
+    const scn = sceneWaveRef.current;
+    const cam = cameraWaveRef.current;
+    const tgt = generatorTargetRef.current;
+    const wave = waveRef.current;
+    if (!renderer || !scn || !cam || !tgt || !wave) return;
+    const s = useDitherStore.getState();
+    const rw = renderer.domElement.width, rh = renderer.domElement.height;
+    if (tgt.width !== rw || tgt.height !== rh) {
+      tgt.setSize(rw, rh);
+      tgt.texture.minFilter = THREE.LinearFilter; tgt.texture.magFilter = THREE.LinearFilter;
+      tgt.texture.needsUpdate = true;
+    }
+    if (cam.fov !== s.waveFov) { cam.fov = s.waveFov; cam.updateProjectionMatrix(); }
+    const aspect = rw / Math.max(rh, 1);
+    if (Math.abs(cam.aspect - aspect) > 1e-4) { cam.aspect = aspect; cam.updateProjectionMatrix(); }
+    cam.position.set(0, s.waveCamHeight, s.waveCamDistance);
+    cam.lookAt(0, 0.5, -12);
+    wave.material.uniforms.uPhase.value = uTimeSeconds * s.waveSpeed;
+    renderer.setRenderTarget(tgt);
+    renderer.render(scn, cam);
+    renderer.setRenderTarget(null);
+  }, []);
+
   const animate = useCallback(() => {
     if (!sceneRef.current || !cameraRef.current || !rendererRef.current || !materialRef.current) {
       return;
@@ -515,7 +548,9 @@ export default function WebGLCanvas() {
     // Generative pre-pass: render the abstract pattern into the target, which the
     // main material samples as tDiffuse. Skipped when paused and nothing changed.
     const genState = useDitherStore.getState();
-    if (genState.is3D) {
+    if (genState.isWaveField) {
+      renderWavePrePass(performance.now() * 0.001);
+    } else if (genState.is3D) {
       render3DPrePass(performance.now() * 0.001);
     } else if (
       genState.isGenerative &&
@@ -546,7 +581,7 @@ export default function WebGLCanvas() {
     }
 
     animationFrameRef.current = requestAnimationFrame(animate);
-  }, [render3DPrePass]);
+  }, [render3DPrePass, renderWavePrePass]);
 
   // Render ONE deterministic frame with time forced to `uTimeSeconds`. Used by the
   // exporter to produce seamless loops (frame i at phase 2π·i/N) at any FPS.
@@ -557,7 +592,9 @@ export default function WebGLCanvas() {
     if (!renderer || !scene || !cam) return;
 
     const s = useDitherStore.getState();
-    if (s.is3D) {
+    if (s.isWaveField) {
+      renderWavePrePass(uTimeSeconds);
+    } else if (s.is3D) {
       render3DPrePass(uTimeSeconds);
     } else {
       const genMat = generatorMaterialRef.current;
@@ -572,7 +609,7 @@ export default function WebGLCanvas() {
     }
     if (materialRef.current) materialRef.current.uniforms.uTime.value = uTimeSeconds;
     renderer.render(scene, cam);
-  }, [render3DPrePass]);
+  }, [render3DPrePass, renderWavePrePass]);
 
   const startAnimation = useCallback(() => {
     if (animationFrameRef.current) {
@@ -682,6 +719,68 @@ export default function WebGLCanvas() {
     generatorDirtyRef.current = true;
     startAnimation();
   }, [createMaterial, startAnimation, rebuild3D]);
+
+  // Push wave-field appearance uniforms + background from the store (colours,
+  // scale, lines — the ones not updated every frame in renderWavePrePass).
+  const applyWaveSettings = useCallback(() => {
+    const wave = waveRef.current;
+    const scn = sceneWaveRef.current;
+    if (!wave || !scn) return;
+    const s = useDitherStore.getState();
+    const u = wave.material.uniforms;
+    u.uScale.value = s.waveScale;
+    u.uAmp.value = s.waveAmp;
+    u.uLineCount.value = s.waveLineCount;
+    u.uLineStrength.value = s.waveLineStrength;
+    u.uGradX.value = s.waveGradient;
+    const setCol = (key: string, hex: string) => {
+      const c = new THREE.Color(hex);
+      (u[key].value as THREE.Vector3).set(c.r, c.g, c.b);
+    };
+    setCol('uColorLow', s.waveColorLow);
+    setCol('uColorMid', s.waveColorMid);
+    setCol('uColorHigh', s.waveColorHigh);
+    setCol('uFog', s.waveColorFog);
+    scn.background = new THREE.Color(s.waveBg);
+    generatorDirtyRef.current = true;
+  }, []);
+
+  // Initialize / resize the wave-field source (no uploaded file required)
+  const initWave = useCallback(() => {
+    if (!sceneRef.current || !rendererRef.current) return;
+    const s = useDitherStore.getState();
+    const w = s.outputWidth, h = s.outputHeight;
+    rendererRef.current.setSize(w, h);
+    if (!generatorTargetRef.current) {
+      generatorTargetRef.current = new THREE.WebGLRenderTarget(w, h, {
+        minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+      });
+    } else {
+      generatorTargetRef.current.setSize(w, h);
+      generatorTargetRef.current.texture.minFilter = THREE.LinearFilter;
+      generatorTargetRef.current.texture.magFilter = THREE.LinearFilter;
+      generatorTargetRef.current.texture.needsUpdate = true;
+    }
+    if (!sceneWaveRef.current) sceneWaveRef.current = new THREE.Scene();
+    const scn = sceneWaveRef.current;
+    if (!cameraWaveRef.current) cameraWaveRef.current = new THREE.PerspectiveCamera(s.waveFov, w / h, 0.1, 400);
+    if (!waveRef.current) {
+      const wave = createWaveField();
+      waveRef.current = wave;
+      scn.add(wave.mesh);
+    }
+    applyWaveSettings();
+    // Main material samples the source target as tDiffuse
+    const mainMaterial = createMaterial(generatorTargetRef.current.texture, w, h);
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    if (meshRef.current) { sceneRef.current.remove(meshRef.current); meshRef.current.geometry.dispose(); }
+    const quad = new THREE.Mesh(geometry, mainMaterial);
+    meshRef.current = quad; sceneRef.current.add(quad);
+    setResolution({ width: w, height: h });
+    setHasImage(true);
+    generatorDirtyRef.current = true;
+    startAnimation();
+  }, [applyWaveSettings, createMaterial, startAnimation]);
 
   // Load image file
   const loadImage = useCallback((file: File) => {
@@ -926,8 +1025,8 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isGenerative) {
       initGenerative();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().is3D) {
-      // Left generative mode with no file/3D loaded → stop the loop, show the prompt
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField) {
+      // Left generative mode with no other source loaded → stop the loop, show the prompt
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
@@ -938,12 +1037,23 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.is3D) {
       init3D();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().isWaveField) {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ditherState.is3D, ditherState.outputWidth, ditherState.outputHeight, init3D]);
+
+  // Enable / resize / tear down the wave-field source
+  useEffect(() => {
+    if (ditherState.isWaveField) {
+      initWave();
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D) {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      setHasImage(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ditherState.isWaveField, ditherState.outputWidth, ditherState.outputHeight, initWave]);
 
   // Rebuild the 3D mesh / material when its appearance changes
   useEffect(() => {
@@ -951,6 +1061,15 @@ export default function WebGLCanvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ditherState.object3DShape, ditherState.object3DMaterial, ditherState.object3DColor,
       ditherState.object3DBg, ditherState.object3DLowRes, ditherState.object3DVertexSnap]);
+
+  // Live-update wave-field appearance uniforms (camera/speed are read each frame
+  // in renderWavePrePass, so only the colour/shape uniforms need this effect)
+  useEffect(() => {
+    if (ditherState.isWaveField) applyWaveSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ditherState.waveScale, ditherState.waveAmp, ditherState.waveLineCount, ditherState.waveLineStrength,
+      ditherState.waveGradient, ditherState.waveColorLow, ditherState.waveColorMid, ditherState.waveColorHigh,
+      ditherState.waveColorFog, ditherState.waveBg]);
 
   // Live-update generator uniforms as generative settings change (independent of
   // the dither palette, which is driven by the main uniform-update effect below)
@@ -1191,7 +1310,9 @@ export default function WebGLCanvas() {
     const cam = cameraRef.current;
     if (!renderer || !scene || !cam) return;
     const s = useDitherStore.getState();
-    if (s.is3D) {
+    if (s.isWaveField) {
+      renderWavePrePass(performance.now() * 0.001);
+    } else if (s.is3D) {
       render3DPrePass(performance.now() * 0.001);
     } else {
       const genMat = generatorMaterialRef.current;
@@ -1205,7 +1326,7 @@ export default function WebGLCanvas() {
     }
     if (materialRef.current) materialRef.current.uniforms.uTime.value = performance.now() * 0.001;
     renderer.render(scene, cam);
-  }, [render3DPrePass]);
+  }, [render3DPrePass, renderWavePrePass]);
 
   useEffect(() => {
     generatorExport.renderExportFrame = renderExportFrame;
