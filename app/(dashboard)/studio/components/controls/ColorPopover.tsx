@@ -17,7 +17,7 @@ function SliderRow({ label, value, max = 100, onChange, grad }: {
       <input
         type="range" min={0} max={max} step={1} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full h-2 appearance-none cursor-pointer rounded-sm border border-white/10 rounded-xl [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-white/30 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-white/30 [&::-moz-range-thumb]:cursor-pointer"
+        className="w-full h-2.5 appearance-none cursor-pointer rounded-full border border-white/10 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-white/30 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-white/30 [&::-moz-range-thumb]:cursor-pointer"
         style={{ background: grad }}
       />
     </div>
@@ -66,9 +66,13 @@ export default function ColorPopover({ label, value, onChange }: {
   const toggle = () => {
     if (!open && triggerRef.current) {
       const r = triggerRef.current.getBoundingClientRect();
-      const W = 248;
+      const W = 256;
+      const H = Math.min(452, window.innerHeight - 16);
       const left = Math.max(8, Math.min(r.right - W, window.innerWidth - W - 8));
-      const top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 380));
+      // Open below the swatch; if it would overflow the bottom, open above it.
+      let top = r.bottom + 8;
+      if (top + H > window.innerHeight - 8) top = r.top - 8 - H;
+      if (top < 8) top = 8;
       setPos({ top, left });
     }
     setOpen((o) => !o);
@@ -88,8 +92,8 @@ export default function ColorPopover({ label, value, onChange }: {
         <>
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
           <div
-            className="fixed z-[61] w-[248px] p-3 glass-strong rounded-2xl shadow-2xl space-y-3 animate-fade-up"
-            style={{ top: pos.top, left: pos.left }}
+            className="fixed z-[61] w-[256px] p-3.5 rounded-2xl border border-white/12 bg-[#161619] shadow-[0_24px_70px_-15px_rgba(0,0,0,0.85)] space-y-3.5 animate-fade-up overflow-y-auto"
+            style={{ top: pos.top, left: pos.left, maxHeight: 'min(452px, calc(100vh - 16px))' }}
           >
             <div className="text-[10px] text-white/40 uppercase tracking-wide">{label}</div>
 
@@ -123,7 +127,7 @@ export default function ColorPopover({ label, value, onChange }: {
               <div className="flex gap-1">
                 {lightnessRamp(hex, 6).map((c, i) => (
                   <button key={i} onClick={() => apply(c)} title={c}
-                    className="flex-1 h-5 border border-white/10 rounded-xl hover:border-white/40" style={{ backgroundColor: c }} />
+                    className="flex-1 h-6 border border-white/10 rounded-md hover:border-white/40 transition-colors" style={{ backgroundColor: c }} />
                 ))}
               </div>
             </div>
@@ -133,7 +137,7 @@ export default function ColorPopover({ label, value, onChange }: {
               <div className="flex gap-1">
                 {harmonies(hex).map((h, i) => (
                   <button key={i} onClick={() => apply(h.hex)} title={`${h.label} · ${h.hex}`}
-                    className="flex-1 h-5 border border-white/10 rounded-xl hover:border-white/40" style={{ backgroundColor: h.hex }} />
+                    className="flex-1 h-6 border border-white/10 rounded-md hover:border-white/40 transition-colors" style={{ backgroundColor: h.hex }} />
                 ))}
               </div>
             </div>
@@ -148,7 +152,7 @@ export default function ColorPopover({ label, value, onChange }: {
                 {savedColors.map((c) => (
                   <div key={c} className="relative group">
                     <button onClick={() => apply(c)} title={c}
-                      className="w-5 h-5 border border-white/10 rounded-xl hover:border-white/40" style={{ backgroundColor: c }} />
+                      className="w-6 h-6 border border-white/10 rounded-md hover:border-white/40 transition-colors" style={{ backgroundColor: c }} />
                     <button onClick={() => removeSavedColor(c)} aria-label="Remove"
                       className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white text-[#0b0b0d] text-[9px] leading-none flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100">×</button>
                   </div>
