@@ -1,5 +1,22 @@
 import { create } from 'zustand';
 import { extractPalette } from '@/lib/utils/colorExtractor';
+import { WAVE_TYPE_PRESETS } from '@/lib/three/waveField';
+
+// Saved-colour swatches persist across sessions via localStorage.
+const SAVED_COLORS_KEY = 'ditherSavedColors';
+const loadSavedColors = (): string[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const v = JSON.parse(localStorage.getItem(SAVED_COLORS_KEY) || '[]');
+    return Array.isArray(v) ? v.slice(0, 30) : [];
+  } catch {
+    return [];
+  }
+};
+const persistSavedColors = (colors: string[]) => {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(SAVED_COLORS_KEY, JSON.stringify(colors)); } catch { /* ignore */ }
+};
 
 export interface DitherState {
   // File state
@@ -24,6 +41,8 @@ export interface DitherState {
 
   // Wave Field source — flowing displaced terrain (rendered then dithered)
   isWaveField: boolean;
+  waveType: number; // 0 waves, 1 wind, 2 water, 3 sun
+  waveGlow: number; // crest emission strength
   waveScale: number; // spatial frequency of the field
   waveAmp: number; // height amplitude
   waveLineCount: number; // contour lines per world unit
@@ -38,6 +57,9 @@ export interface DitherState {
   waveCamHeight: number; // camera height (grazing angle)
   waveCamDistance: number; // camera distance
   waveFov: number; // camera field of view
+
+  // Saved colour swatches (persisted, reusable across all colour pickers)
+  savedColors: string[];
 
   // Output canvas size (used by generative mode for presentation export)
   outputWidth: number;
@@ -257,6 +279,9 @@ export interface DitherState {
   setGenerativeEnabled: (enabled: boolean) => void;
   setThreeDEnabled: (enabled: boolean) => void;
   setWaveFieldEnabled: (enabled: boolean) => void;
+  setWaveType: (type: number) => void;
+  addSavedColor: (hex: string) => void;
+  removeSavedColor: (hex: string) => void;
   setGenerativeSetting: (key: string, value: number | boolean | string) => void;
   setGenerativeColors: (colors: string[]) => void;
   setGenerativeColor: (index: number, color: string) => void;
@@ -288,6 +313,8 @@ const defaultState = {
 
   // Wave Field source
   isWaveField: false,
+  waveType: 0,
+  waveGlow: 0.18,
   waveScale: 0.15,
   waveAmp: 2.3,
   waveLineCount: 1.3,
@@ -302,6 +329,8 @@ const defaultState = {
   waveCamHeight: 8,
   waveCamDistance: 36,
   waveFov: 42,
+
+  savedColors: loadSavedColors(),
 
   // Output canvas size
   outputWidth: 1920,
@@ -535,6 +564,8 @@ export const useDitherStore = create<DitherState>((set) => ({
     object3DLowRes: state.object3DLowRes,
     object3DVertexSnap: state.object3DVertexSnap,
     isWaveField: state.isWaveField,
+    waveType: state.waveType,
+    waveGlow: state.waveGlow,
     waveScale: state.waveScale,
     waveAmp: state.waveAmp,
     waveLineCount: state.waveLineCount,
@@ -549,6 +580,7 @@ export const useDitherStore = create<DitherState>((set) => ({
     waveCamHeight: state.waveCamHeight,
     waveCamDistance: state.waveCamDistance,
     waveFov: state.waveFov,
+    savedColors: state.savedColors,
     outputWidth: state.outputWidth,
     outputHeight: state.outputHeight,
     outputAspect: state.outputAspect,
@@ -630,6 +662,27 @@ export const useDitherStore = create<DitherState>((set) => ({
     set(enabled
       ? { isWaveField: true, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
       : { isWaveField: false }),
+
+  addSavedColor: (hex) => set((state) => {
+    const c = hex.toLowerCase();
+    if (state.savedColors.includes(c)) return {};
+    const next = [c, ...state.savedColors].slice(0, 30);
+    persistSavedColors(next);
+    return { savedColors: next };
+  }),
+  removeSavedColor: (hex) => set((state) => {
+    const next = state.savedColors.filter((c) => c !== hex.toLowerCase());
+    persistSavedColors(next);
+    return { savedColors: next };
+  }),
+
+  // Apply a flow-field theme preset (waves / wind / water / sun)
+  setWaveType: (type) => set(() => {
+    const preset = WAVE_TYPE_PRESETS[type] ?? WAVE_TYPE_PRESETS[0];
+    const { label: _label, ...fields } = preset;
+    void _label;
+    return fields;
+  }),
 
   setGenerativeSetting: (key, value) => set({ [key]: value } as any),
 

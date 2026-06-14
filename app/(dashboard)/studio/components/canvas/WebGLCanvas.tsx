@@ -7,7 +7,7 @@ import { vertexShader } from '@/lib/three/shaders/vertexShader';
 import { fragmentShader } from '@/lib/three/shaders/fragmentShader';
 import { generatorShader } from '@/lib/three/shaders/generatorShader';
 import { generatorExport } from '@/lib/three/generatorController';
-import { createWaveField, type WaveField } from '@/lib/three/waveField';
+import { createWaveField, createWaveScreen, type WaveField, type WaveScreen } from '@/lib/three/waveField';
 
 // The fragment shader declares `uniform vec3 uPaletteColors[16]` — a fixed-size
 // array. Three.js uploads all 16 slots and calls .toArray() on each element, so
@@ -166,6 +166,8 @@ export default function WebGLCanvas() {
   const sceneWaveRef = useRef<THREE.Scene | null>(null);
   const cameraWaveRef = useRef<THREE.PerspectiveCamera | null>(null);
   const waveRef = useRef<WaveField | null>(null);
+  const sceneWaveScreenRef = useRef<THREE.Scene | null>(null);
+  const waveScreenRef = useRef<WaveScreen | null>(null);
   // Text / logo overlay (composited into the same canvas so it exports)
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayTextureRef = useRef<THREE.CanvasTexture | null>(null);
@@ -225,6 +227,7 @@ export default function WebGLCanvas() {
       generatorMaterialRef.current?.dispose();
       generatorMeshRef.current?.geometry.dispose();
       waveRef.current?.dispose();
+      waveScreenRef.current?.dispose();
     };
   }, []);
 
@@ -497,16 +500,14 @@ export default function WebGLCanvas() {
     renderer.setRenderTarget(null);
   }, []);
 
-  // Render the wave-field scene into the source target (tDiffuse), full-res.
-  // uPhase = t·speed (radians) → the field loops every 2π/speed seconds, which the
-  // exporter spans exactly for a seamless loop.
+  // Render the flow-field source into the source target (tDiffuse), full-res.
+  // uPhase = t·speed (radians) → loops every 2π/speed seconds, which the exporter
+  // spans exactly. Waves/Water render the 3D plane; Wind/Sun render a screen quad
+  // drawn natively (streamlines / corona disc) rather than as a terrain.
   const renderWavePrePass = useCallback((uTimeSeconds: number) => {
     const renderer = rendererRef.current;
-    const scn = sceneWaveRef.current;
-    const cam = cameraWaveRef.current;
     const tgt = generatorTargetRef.current;
-    const wave = waveRef.current;
-    if (!renderer || !scn || !cam || !tgt || !wave) return;
+    if (!renderer || !tgt) return;
     const s = useDitherStore.getState();
     const rw = renderer.domElement.width, rh = renderer.domElement.height;
     if (tgt.width !== rw || tgt.height !== rh) {
@@ -514,12 +515,36 @@ export default function WebGLCanvas() {
       tgt.texture.minFilter = THREE.LinearFilter; tgt.texture.magFilter = THREE.LinearFilter;
       tgt.texture.needsUpdate = true;
     }
+    const phase = uTimeSeconds * s.waveSpeed;
+    const ty = Math.round(s.waveType);
+
+    if (ty === 1 || ty === 3) {
+      // Screen-space: Wind (streamlines) / Sun (corona disc)
+      const scn = sceneWaveScreenRef.current;
+      const scr = waveScreenRef.current;
+      const cam = cameraRef.current; // screen vertex emits clip-space; camera is ignored
+      if (!scn || !scr || !cam) return;
+      const u = scr.material.uniforms;
+      u.uPhase.value = phase;
+      u.uType.value = s.waveType;
+      u.uAspect.value = rw / Math.max(rh, 1);
+      renderer.setRenderTarget(tgt);
+      renderer.render(scn, cam);
+      renderer.setRenderTarget(null);
+      return;
+    }
+
+    // Surface: Waves / Water (3D displaced plane, grazing camera)
+    const scn = sceneWaveRef.current;
+    const cam = cameraWaveRef.current;
+    const wave = waveRef.current;
+    if (!scn || !cam || !wave) return;
     if (cam.fov !== s.waveFov) { cam.fov = s.waveFov; cam.updateProjectionMatrix(); }
     const aspect = rw / Math.max(rh, 1);
     if (Math.abs(cam.aspect - aspect) > 1e-4) { cam.aspect = aspect; cam.updateProjectionMatrix(); }
     cam.position.set(0, s.waveCamHeight, s.waveCamDistance);
     cam.lookAt(0, 0.5, -12);
-    wave.material.uniforms.uPhase.value = uTimeSeconds * s.waveSpeed;
+    wave.material.uniforms.uPhase.value = phase;
     renderer.setRenderTarget(tgt);
     renderer.render(scn, cam);
     renderer.setRenderTarget(null);
@@ -720,28 +745,41 @@ export default function WebGLCanvas() {
     startAnimation();
   }, [createMaterial, startAnimation, rebuild3D]);
 
-  // Push wave-field appearance uniforms + background from the store (colours,
-  // scale, lines — the ones not updated every frame in renderWavePrePass).
+  // Push appearance uniforms from the store onto whichever flow-field materials
+  // exist (the 3D plane for Waves/Water and the screen quad for Wind/Sun).
   const applyWaveSettings = useCallback(() => {
-    const wave = waveRef.current;
-    const scn = sceneWaveRef.current;
-    if (!wave || !scn) return;
     const s = useDitherStore.getState();
-    const u = wave.material.uniforms;
-    u.uScale.value = s.waveScale;
-    u.uAmp.value = s.waveAmp;
-    u.uLineCount.value = s.waveLineCount;
-    u.uLineStrength.value = s.waveLineStrength;
-    u.uGradX.value = s.waveGradient;
-    const setCol = (key: string, hex: string) => {
-      const c = new THREE.Color(hex);
-      (u[key].value as THREE.Vector3).set(c.r, c.g, c.b);
+    // Colours are fed as RAW sRGB (hex/255) — the same convention the generator
+    // uses — because the dither pipeline samples this target raw. Using
+    // THREE.Color() here would sRGB→linear-convert them and render too dark.
+    const setCol = (u: Record<string, THREE.IUniform>, key: string, hex: string) => {
+      if (!u[key]) return;
+      const [r, g, b] = hexToRgb01(hex);
+      (u[key].value as THREE.Vector3).set(r, g, b);
     };
-    setCol('uColorLow', s.waveColorLow);
-    setCol('uColorMid', s.waveColorMid);
-    setCol('uColorHigh', s.waveColorHigh);
-    setCol('uFog', s.waveColorFog);
-    scn.background = new THREE.Color(s.waveBg);
+    const apply = (u?: Record<string, THREE.IUniform>) => {
+      if (!u) return;
+      if (u.uType) u.uType.value = s.waveType;
+      if (u.uGlow) u.uGlow.value = s.waveGlow;
+      if (u.uScale) u.uScale.value = s.waveScale;
+      if (u.uAmp) u.uAmp.value = s.waveAmp;
+      if (u.uLineCount) u.uLineCount.value = s.waveLineCount;
+      if (u.uLineStrength) u.uLineStrength.value = s.waveLineStrength;
+      if (u.uGradX) u.uGradX.value = s.waveGradient;
+      setCol(u, 'uColorLow', s.waveColorLow);
+      setCol(u, 'uColorMid', s.waveColorMid);
+      setCol(u, 'uColorHigh', s.waveColorHigh);
+      setCol(u, 'uFog', s.waveColorFog);
+      setCol(u, 'uBg', s.waveBg);
+    };
+    apply(waveRef.current?.material.uniforms);
+    apply(waveScreenRef.current?.material.uniforms);
+    if (sceneWaveRef.current) {
+      // Write the raw sRGB value straight into the (linear) target so the clear
+      // colour isn't darkened by an sRGB→linear conversion.
+      const [r, g, b] = hexToRgb01(s.waveBg);
+      sceneWaveRef.current.background = new THREE.Color().setRGB(r, g, b, THREE.LinearSRGBColorSpace);
+    }
     generatorDirtyRef.current = true;
   }, []);
 
@@ -764,6 +802,13 @@ export default function WebGLCanvas() {
     if (!sceneWaveRef.current) sceneWaveRef.current = new THREE.Scene();
     const scn = sceneWaveRef.current;
     if (!cameraWaveRef.current) cameraWaveRef.current = new THREE.PerspectiveCamera(s.waveFov, w / h, 0.1, 400);
+    // Screen-space scene (Wind / Sun) — a fullscreen quad drawn natively.
+    if (!sceneWaveScreenRef.current) sceneWaveScreenRef.current = new THREE.Scene();
+    if (!waveScreenRef.current) {
+      const scr = createWaveScreen();
+      waveScreenRef.current = scr;
+      sceneWaveScreenRef.current.add(scr.mesh);
+    }
     if (!waveRef.current) {
       const wave = createWaveField();
       waveRef.current = wave;
@@ -1067,8 +1112,9 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isWaveField) applyWaveSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ditherState.waveScale, ditherState.waveAmp, ditherState.waveLineCount, ditherState.waveLineStrength,
-      ditherState.waveGradient, ditherState.waveColorLow, ditherState.waveColorMid, ditherState.waveColorHigh,
+  }, [ditherState.waveType, ditherState.waveGlow, ditherState.waveScale, ditherState.waveAmp,
+      ditherState.waveLineCount, ditherState.waveLineStrength, ditherState.waveGradient,
+      ditherState.waveColorLow, ditherState.waveColorMid, ditherState.waveColorHigh,
       ditherState.waveColorFog, ditherState.waveBg]);
 
   // Live-update generator uniforms as generative settings change (independent of
