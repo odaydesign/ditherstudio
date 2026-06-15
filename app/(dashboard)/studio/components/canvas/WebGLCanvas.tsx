@@ -171,6 +171,7 @@ export default function WebGLCanvas() {
   const waveScreenRef = useRef<WaveScreen | null>(null);
   const sceneGlassRef = useRef<THREE.Scene | null>(null);
   const glassRef = useRef<GlassField | null>(null);
+  const glassBgTextureRef = useRef<THREE.Texture | null>(null);
   // Text / logo overlay (composited into the same canvas so it exports)
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayTextureRef = useRef<THREE.CanvasTexture | null>(null);
@@ -232,6 +233,7 @@ export default function WebGLCanvas() {
       waveRef.current?.dispose();
       waveScreenRef.current?.dispose();
       glassRef.current?.dispose();
+      glassBgTextureRef.current?.dispose();
     };
   }, []);
 
@@ -866,7 +868,9 @@ export default function WebGLCanvas() {
     const s = useDitherStore.getState();
     const u = scr.material.uniforms;
     u.uRibs.value = s.glassRibs;
-    u.uRefract.value = s.glassRefract;
+    u.uCurvature.value = s.glassRefract;
+    u.uIOR.value = s.glassIOR;
+    u.uReflect.value = s.glassReflect;
     u.uFrost.value = s.glassFrost;
     u.uSheen.value = s.glassSheen;
     u.uDispersion.value = s.glassDispersion;
@@ -1222,9 +1226,43 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isGlass) applyGlassSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ditherState.glassRibs, ditherState.glassRefract, ditherState.glassFrost, ditherState.glassSheen,
-      ditherState.glassDispersion, ditherState.glassWavy, ditherState.glassAngle,
-      ditherState.glassColorA, ditherState.glassColorB, ditherState.glassColorC, ditherState.glassBg]);
+  }, [ditherState.glassRibs, ditherState.glassRefract, ditherState.glassIOR, ditherState.glassReflect,
+      ditherState.glassFrost, ditherState.glassSheen, ditherState.glassDispersion, ditherState.glassWavy,
+      ditherState.glassAngle, ditherState.glassColorA, ditherState.glassColorB, ditherState.glassColorC,
+      ditherState.glassBg]);
+
+  // Load / clear the uploaded background image that the glass refracts.
+  useEffect(() => {
+    const mat = glassRef.current?.material;
+    const src = ditherState.glassBgImage;
+    if (!mat) return;
+    if (!src) {
+      mat.uniforms.uHasBg.value = 0;
+      glassBgTextureRef.current?.dispose();
+      glassBgTextureRef.current = null;
+      generatorDirtyRef.current = true;
+      return;
+    }
+    const img = new window.Image();
+    img.onload = () => {
+      glassBgTextureRef.current?.dispose();
+      const tex = new THREE.Texture(img);
+      tex.needsUpdate = true;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      glassBgTextureRef.current = tex;
+      const m = glassRef.current?.material;
+      if (m) {
+        m.uniforms.tBg.value = tex;
+        m.uniforms.uBgAspect.value = (img.naturalWidth || 16) / (img.naturalHeight || 9);
+        m.uniforms.uHasBg.value = 1;
+      }
+      generatorDirtyRef.current = true;
+    };
+    img.src = src;
+  }, [ditherState.glassBgImage, ditherState.isGlass]);
 
   // Live-update generator uniforms as generative settings change (independent of
   // the dither palette, which is driven by the main uniform-update effect below)

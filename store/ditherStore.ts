@@ -61,9 +61,11 @@ export interface DitherState {
   // Glass source — fluted/ribbed glass refraction (Three.js)
   isGlass: boolean;
   glassRibs: number;       // ribs across
-  glassRefract: number;    // lens bend strength
+  glassRefract: number;    // rib lens curvature (refraction magnification)
+  glassIOR: number;        // index of refraction
+  glassReflect: number;    // reflection strength (fresnel)
   glassFrost: number;      // blur / roughness
-  glassSheen: number;      // fresnel edge sheen
+  glassSheen: number;      // specular highlight
   glassDispersion: number; // RGB chromatic split
   glassWavy: number;       // bow the ribs
   glassAngle: number;      // 0 vertical, 1 horizontal
@@ -72,6 +74,9 @@ export interface DitherState {
   glassColorB: string;
   glassColorC: string;
   glassBg: string;         // backdrop behind the glass
+  glassBgImage: string | null; // uploaded image refracted behind the glass (data URL)
+  glassBgW: number;        // image natural width  (for cover-fit aspect)
+  glassBgH: number;        // image natural height
 
   // Saved colour swatches (persisted, reusable across all colour pickers)
   savedColors: string[];
@@ -349,6 +354,8 @@ const defaultState = {
   isGlass: false,
   glassRibs: 22,
   glassRefract: 0.7,
+  glassIOR: 1.45,
+  glassReflect: 0.5,
   glassFrost: 0.45,
   glassSheen: 0.6,
   glassDispersion: 0.5,
@@ -359,6 +366,9 @@ const defaultState = {
   glassColorB: '#7a45ff',
   glassColorC: '#16348f',
   glassBg: '#05060c',
+  glassBgImage: null,
+  glassBgW: 0,
+  glassBgH: 0,
 
   savedColors: loadSavedColors(),
 
@@ -613,6 +623,8 @@ export const useDitherStore = create<DitherState>((set) => ({
     isGlass: state.isGlass,
     glassRibs: state.glassRibs,
     glassRefract: state.glassRefract,
+    glassIOR: state.glassIOR,
+    glassReflect: state.glassReflect,
     glassFrost: state.glassFrost,
     glassSheen: state.glassSheen,
     glassDispersion: state.glassDispersion,
@@ -623,6 +635,9 @@ export const useDitherStore = create<DitherState>((set) => ({
     glassColorB: state.glassColorB,
     glassColorC: state.glassColorC,
     glassBg: state.glassBg,
+    glassBgImage: state.glassBgImage,
+    glassBgW: state.glassBgW,
+    glassBgH: state.glassBgH,
     savedColors: state.savedColors,
     outputWidth: state.outputWidth,
     outputHeight: state.outputHeight,
