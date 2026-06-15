@@ -16,6 +16,7 @@
   "build": {
     "appId": "com.ditherstudio.app",
     "productName": "Dither Studio",
+    "afterPack": "scripts/afterPack.js",
     "mac": {
       "category": "public.app-category.graphics-design",
       "target": "dmg",
