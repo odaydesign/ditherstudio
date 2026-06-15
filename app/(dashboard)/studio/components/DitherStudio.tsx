@@ -11,6 +11,7 @@ import WaveFieldPanel from './controls/WaveFieldPanel';
 import GlassPanel from './controls/GlassPanel';
 import LayersPanel from './controls/LayersPanel';
 import { useDitherStore } from '@/store/ditherStore';
+import { initHistory, undo, redo, useHistoryMeta } from '@/lib/history';
 import { generatorExport } from '@/lib/three/generatorController';
 import GIF from 'gif.js';
 import JSZip from 'jszip';
@@ -25,6 +26,13 @@ const IconGlass = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" str
 const IconLayers = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="3" /><rect x="7.5" y="7.5" width="9" height="9" rx="2" /></svg>);
 const IconShuffle = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" /></svg>);
 const IconReset = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5" /></svg>);
+const IconUndo = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-4" /></svg>);
+const IconRedo = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h4" /></svg>);
+const IconCopy = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>);
+const IconCheck = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>);
+const IconHelp = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 0 1 4.5 1.5c0 1.5-2 2-2 3.5" /><path d="M12 17.5h.01" /></svg>);
+const IconExpand = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3" /></svg>);
+const IconShrink = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3m13-5h-3a2 2 0 0 0-2 2v3" /></svg>);
 const IconExport = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" /></svg>);
 
 function PanelHeader({ title, subtitle }: { title: string; subtitle?: string }) {
@@ -333,6 +341,11 @@ export default function DitherStudio() {
   // Get video duration from store and auto-update export duration
   const { isVideo, videoDuration } = useDitherStore();
   const ditherState = useDitherStore();
+  const canUndo = useHistoryMeta((s) => s.canUndo);
+  const canRedo = useHistoryMeta((s) => s.canRedo);
+  const [justCopied, setJustCopied] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   // Sync export duration with video duration
   useEffect(() => {
@@ -525,6 +538,52 @@ export default function DitherStudio() {
     }
     setShowExportMenu(false);
   };
+
+  const copyToClipboard = async () => {
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
+    if (!canvas || typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) return;
+    try {
+      const blob: Blob | null = await new Promise((res) => canvas.toBlob((b) => res(b), 'image/png'));
+      if (!blob) return;
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      setJustCopied(true);
+      setTimeout(() => setJustCopied(false), 1200);
+    } catch (err) {
+      console.error('Copy to clipboard failed', err);
+    }
+  };
+
+  // Undo/redo history + global keyboard shortcuts.
+  useEffect(() => {
+    initHistory();
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+      if (meta && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redo(); return; }
+      if (meta) return;
+      const st = useDitherStore.getState();
+      switch (e.key) {
+        case 'r': case 'R': st.resetAll(); setSelectedPresetId(''); break;
+        case 'e': case 'E': exportImage('png'); break;
+        case 'c': case 'C': copyToClipboard(); break;
+        case 'f': case 'F': setFocusMode((v) => !v); break;
+        case '?': setShowShortcuts((v) => !v); break;
+        case 'Escape': setShowShortcuts(false); setFocusMode(false); break;
+        case '1': st.setGenerativeEnabled(false); st.setThreeDEnabled(false); st.setWaveFieldEnabled(false); st.setGlassEnabled(false); st.setLayersEnabled(false); break;
+        case '2': st.setGenerativeEnabled(true); break;
+        case '3': st.setThreeDEnabled(true); break;
+        case '4': st.setWaveFieldEnabled(true); break;
+        case '5': st.setGlassEnabled(true); break;
+        case '6': st.setLayersEnabled(true); break;
+        default: return;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleExportSVG = () => {
     const canvas = document.querySelector('canvas');
@@ -962,6 +1021,23 @@ export default function DitherStudio() {
         <div className="flex-1" />
 
         <div className="flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts (?)" className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10">
+            <IconHelp />
+          </button>
+          <button onClick={() => setFocusMode((v) => !v)} title="Focus mode (F)" className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${focusMode ? 'text-white bg-white/10 border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10 border-transparent hover:border-white/10'}`}>
+            {focusMode ? <IconShrink /> : <IconExpand />}
+          </button>
+          <div className="w-px h-5 bg-white/10 mx-0.5" />
+          <button onClick={() => undo()} disabled={!canUndo} title="Undo (⌘Z)" className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-default">
+            <IconUndo />
+          </button>
+          <button onClick={() => redo()} disabled={!canRedo} title="Redo (⌘⇧Z)" className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-default">
+            <IconRedo />
+          </button>
+          <div className="w-px h-5 bg-white/10 mx-0.5" />
+          <button onClick={copyToClipboard} title="Copy to clipboard (C)" className={`w-8 h-8 flex items-center justify-center rounded-lg border border-transparent transition-colors ${justCopied ? 'text-emerald-400' : 'text-white/70 hover:text-white hover:bg-white/10 hover:border-white/10'}`}>
+            {justCopied ? <IconCheck /> : <IconCopy />}
+          </button>
           <button onClick={() => useDitherStore.getState().surpriseMe()} title="Surprise me" className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10">
             <IconShuffle />
           </button>
@@ -974,10 +1050,43 @@ export default function DitherStudio() {
         </div>
       </header>
 
+      {focusMode && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[70] px-3 py-1.5 rounded-full bg-black/70 border border-white/10 text-[11px] text-white/70 backdrop-blur-md pointer-events-none">
+          Focus mode — press <span className="text-white/95 font-medium">F</span> or <span className="text-white/95 font-medium">Esc</span> to exit
+        </div>
+      )}
+
+      {showShortcuts && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowShortcuts(false)}>
+          <div className="w-[320px] rounded-2xl border border-white/12 bg-[#161619] p-5 shadow-[0_24px_70px_-15px_rgba(0,0,0,0.85)]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3.5">
+              <h3 className="text-sm font-medium text-white">Keyboard shortcuts</h3>
+              <button onClick={() => setShowShortcuts(false)} className="text-white/50 hover:text-white text-lg leading-none">×</button>
+            </div>
+            <div className="space-y-2 text-xs">
+              {([
+                ['Undo / Redo', '⌘Z / ⌘⇧Z'],
+                ['Reset all', 'R'],
+                ['Export PNG', 'E'],
+                ['Copy to clipboard', 'C'],
+                ['Focus mode', 'F'],
+                ['Switch source', '1 – 6'],
+                ['This help', '?'],
+              ] as [string, string][]).map(([label, key]) => (
+                <div key={label} className="flex items-center justify-between">
+                  <span className="text-white/65">{label}</span>
+                  <kbd className="px-1.5 py-0.5 rounded-md bg-white/[0.08] border border-white/10 text-white/90 font-mono text-[11px]">{key}</kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ===== Body ===== */}
       <div className="flex-1 flex min-h-0">
         {/* LEFT — Source */}
-        <aside className="w-[300px] shrink-0 flex flex-col border-r border-white/10 bg-white/[0.025] backdrop-blur-2xl">
+        <aside className={`w-[300px] shrink-0 flex-col border-r border-white/10 bg-white/[0.025] backdrop-blur-2xl ${focusMode ? 'hidden' : 'flex'}`}>
           <PanelHeader title="Source" subtitle={ditherState.isLayers ? 'layers' : ditherState.isGlass ? 'glass' : ditherState.isWaveField ? 'wave field' : ditherState.is3D ? '3d object' : ditherState.isGenerative ? 'generative' : 'upload'} />
           <div className="flex-1 overflow-y-auto p-4">
             {/* Source creative controls */}
@@ -1300,7 +1409,7 @@ export default function DitherStudio() {
         </main>
 
         {/* RIGHT — Adjust */}
-        <aside className="w-[340px] shrink-0 flex flex-col border-l border-white/10 bg-white/[0.025] backdrop-blur-2xl">
+        <aside className={`w-[340px] shrink-0 flex-col border-l border-white/10 bg-white/[0.025] backdrop-blur-2xl ${focusMode ? 'hidden' : 'flex'}`}>
           <PanelHeader title="Adjust" />
           <div className="flex-1 overflow-y-auto p-4">
             <SimplifiedSettings />
