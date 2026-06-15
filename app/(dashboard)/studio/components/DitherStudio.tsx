@@ -8,6 +8,7 @@ import SimplifiedSettings from './controls/SimplifiedSettings';
 import GenerativePanel from './controls/GenerativePanel';
 import Object3DPanel from './controls/Object3DPanel';
 import WaveFieldPanel from './controls/WaveFieldPanel';
+import GlassPanel from './controls/GlassPanel';
 import { useDitherStore } from '@/store/ditherStore';
 import { generatorExport } from '@/lib/three/generatorController';
 import GIF from 'gif.js';
@@ -19,6 +20,7 @@ const IconUpload = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" st
 const IconGenerate = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4L12 3zM19 14l.9 2.3L22 17l-2.1.7L19 20l-.9-2.3L16 17l2.1-.7L19 14z" /></svg>);
 const IconCube = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7l9-5zM3 7l9 5 9-5M12 12v10" /></svg>);
 const IconWave = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12c2.5-4 5-4 7.5 0s5 4 7.5 0 5-4 5 0" /></svg>);
+const IconGlass = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M8 3.5v17M12.5 3.5v17M16.5 3.5v17" /></svg>);
 const IconShuffle = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" /></svg>);
 const IconReset = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5" /></svg>);
 const IconExport = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" /></svg>);
@@ -489,7 +491,7 @@ export default function DitherStudio() {
   const exportDims = useCallback((): { w: number; h: number } => {
     const s = useDitherStore.getState();
     const c = document.querySelector('canvas');
-    if (!s.isGenerative && !s.is3D && !s.isWaveField) return { w: c?.width || s.outputWidth, h: c?.height || s.outputHeight };
+    if (!s.isGenerative && !s.is3D && !s.isWaveField && !s.isGlass) return { w: c?.width || s.outputWidth, h: c?.height || s.outputHeight };
     let w = s.outputWidth, h = s.outputHeight;
     const MIN_LONG = 3840; // 4K long edge
     const long = Math.max(w, h);
@@ -511,7 +513,7 @@ export default function DitherStudio() {
     }, mimeType, quality);
 
     // Generative / 3D / wave stills render at >= 4K via a temporary hi-res pass.
-    if ((s.isGenerative || s.is3D || s.isWaveField) && generatorExport.beginExport && generatorExport.renderStillFrame) {
+    if ((s.isGenerative || s.is3D || s.isWaveField || s.isGlass) && generatorExport.beginExport && generatorExport.renderStillFrame) {
       const { w, h } = exportDims();
       generatorExport.beginExport(w, h);
       generatorExport.renderStillFrame();
@@ -652,12 +654,15 @@ export default function DitherStudio() {
     const threeDAnim = s.is3D && s.object3DAutoRotate;
     // Wave field always loops: uPhase = t * waveSpeed (radians), period 2π/speed.
     const waveAnim = s.isWaveField;
+    // Glass source loops the same way: uPhase = t * glassSpeed.
+    const glassAnim = s.isGlass;
     // Smooth analog motion (wobble / hum bar) also benefits from a seamless loop;
     // it's phase-locked to this same speed via uAnalogRate (fallback 0.5).
     const analogAnim = s.analogWobble > 0 || s.analogHum > 0;
     const speed = genAnim ? s.generativeSpeed
       : threeDAnim ? s.object3DAutoSpeed
       : waveAnim ? s.waveSpeed
+      : glassAnim ? s.glassSpeed
       : (s.fxAnimate ? s.fxSpeed : (analogAnim ? 0.5 : 0));
     if (speed <= 0) return null;
     const period = (2 * Math.PI) / Math.max(speed, 0.05); // seconds per cycle
@@ -944,6 +949,8 @@ export default function DitherStudio() {
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${ditherState.is3D ? 'bg-white text-[#0b0b0d]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}><IconCube />3D</button>
           <button onClick={() => useDitherStore.getState().setWaveFieldEnabled(true)}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${ditherState.isWaveField ? 'bg-white text-[#0b0b0d]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}><IconWave />Waves</button>
+          <button onClick={() => useDitherStore.getState().setGlassEnabled(true)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${ditherState.isGlass ? 'bg-white text-[#0b0b0d]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}><IconGlass />Glass</button>
         </div>
 
         <div className="flex-1" />
@@ -965,11 +972,11 @@ export default function DitherStudio() {
       <div className="flex-1 flex min-h-0">
         {/* LEFT — Source */}
         <aside className="w-[300px] shrink-0 flex flex-col border-r border-white/10 bg-white/[0.025] backdrop-blur-2xl">
-          <PanelHeader title="Source" subtitle={ditherState.isWaveField ? 'wave field' : ditherState.is3D ? '3d object' : ditherState.isGenerative ? 'generative' : 'upload'} />
+          <PanelHeader title="Source" subtitle={ditherState.isGlass ? 'glass' : ditherState.isWaveField ? 'wave field' : ditherState.is3D ? '3d object' : ditherState.isGenerative ? 'generative' : 'upload'} />
           <div className="flex-1 overflow-y-auto p-4">
             {/* Source creative controls */}
             <div className="mb-8">
-              {ditherState.isWaveField ? <WaveFieldPanel /> : ditherState.is3D ? <Object3DPanel /> : ditherState.isGenerative ? <GenerativePanel /> : (
+              {ditherState.isGlass ? <GlassPanel /> : ditherState.isWaveField ? <WaveFieldPanel /> : ditherState.is3D ? <Object3DPanel /> : ditherState.isGenerative ? <GenerativePanel /> : (
                 <>
                   <UploadZone onBatchSelect={(files) => setBatchFiles(files)} />
                   {batchFiles.length > 0 && (
@@ -1202,7 +1209,7 @@ export default function DitherStudio() {
                   />
                 </div>
 
-                {(((ditherState.isGenerative && ditherState.generativeAnimate) || (ditherState.is3D && ditherState.object3DAutoRotate) || ditherState.isWaveField || ditherState.fxAnimate || ditherState.analogWobble > 0 || ditherState.analogHum > 0)) && (
+                {(((ditherState.isGenerative && ditherState.generativeAnimate) || (ditherState.is3D && ditherState.object3DAutoRotate) || ditherState.isWaveField || ditherState.isGlass || ditherState.fxAnimate || ditherState.analogWobble > 0 || ditherState.analogHum > 0)) && (
                   <label className="flex items-center gap-2 mb-2 cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -1216,8 +1223,9 @@ export default function DitherStudio() {
                         const genAnim = ditherState.isGenerative && ditherState.generativeAnimate && ditherState.generativeMotion !== 6;
                         const threeDAnim = ditherState.is3D && ditherState.object3DAutoRotate;
                         const waveAnim = ditherState.isWaveField;
+                        const glassAnim = ditherState.isGlass;
                         const analogAnim = ditherState.analogWobble > 0 || ditherState.analogHum > 0;
-                        const speed = genAnim ? ditherState.generativeSpeed : threeDAnim ? ditherState.object3DAutoSpeed : waveAnim ? ditherState.waveSpeed : (ditherState.fxAnimate ? ditherState.fxSpeed : (analogAnim ? 0.5 : 0));
+                        const speed = genAnim ? ditherState.generativeSpeed : threeDAnim ? ditherState.object3DAutoSpeed : waveAnim ? ditherState.waveSpeed : glassAnim ? ditherState.glassSpeed : (ditherState.fxAnimate ? ditherState.fxSpeed : (analogAnim ? 0.5 : 0));
                         if (!loopExport || speed <= 0) return '';
                         const period = (2 * Math.PI) / Math.max(speed, 0.05);
                         const cycles = Math.max(1, Math.round(exportDuration / period));

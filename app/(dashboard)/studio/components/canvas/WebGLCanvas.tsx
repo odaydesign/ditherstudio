@@ -8,6 +8,7 @@ import { fragmentShader } from '@/lib/three/shaders/fragmentShader';
 import { generatorShader } from '@/lib/three/shaders/generatorShader';
 import { generatorExport } from '@/lib/three/generatorController';
 import { createWaveField, createWaveScreen, type WaveField, type WaveScreen } from '@/lib/three/waveField';
+import { createGlassField, type GlassField } from '@/lib/three/glassField';
 
 // The fragment shader declares `uniform vec3 uPaletteColors[16]` — a fixed-size
 // array. Three.js uploads all 16 slots and calls .toArray() on each element, so
@@ -168,6 +169,8 @@ export default function WebGLCanvas() {
   const waveRef = useRef<WaveField | null>(null);
   const sceneWaveScreenRef = useRef<THREE.Scene | null>(null);
   const waveScreenRef = useRef<WaveScreen | null>(null);
+  const sceneGlassRef = useRef<THREE.Scene | null>(null);
+  const glassRef = useRef<GlassField | null>(null);
   // Text / logo overlay (composited into the same canvas so it exports)
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayTextureRef = useRef<THREE.CanvasTexture | null>(null);
@@ -228,6 +231,7 @@ export default function WebGLCanvas() {
       generatorMeshRef.current?.geometry.dispose();
       waveRef.current?.dispose();
       waveScreenRef.current?.dispose();
+      glassRef.current?.dispose();
     };
   }, []);
 
@@ -550,6 +554,30 @@ export default function WebGLCanvas() {
     renderer.setRenderTarget(null);
   }, []);
 
+  // Render the glass-field source into the source target (tDiffuse), full-res.
+  // Fullscreen quad (clip-space vertex) → rendered with the main ortho camera.
+  const renderGlassPrePass = useCallback((uTimeSeconds: number) => {
+    const renderer = rendererRef.current;
+    const tgt = generatorTargetRef.current;
+    const scn = sceneGlassRef.current;
+    const scr = glassRef.current;
+    const cam = cameraRef.current;
+    if (!renderer || !tgt || !scn || !scr || !cam) return;
+    const s = useDitherStore.getState();
+    const rw = renderer.domElement.width, rh = renderer.domElement.height;
+    if (tgt.width !== rw || tgt.height !== rh) {
+      tgt.setSize(rw, rh);
+      tgt.texture.minFilter = THREE.LinearFilter; tgt.texture.magFilter = THREE.LinearFilter;
+      tgt.texture.needsUpdate = true;
+    }
+    const u = scr.material.uniforms;
+    u.uPhase.value = uTimeSeconds * s.glassSpeed;
+    u.uAspect.value = rw / Math.max(rh, 1);
+    renderer.setRenderTarget(tgt);
+    renderer.render(scn, cam);
+    renderer.setRenderTarget(null);
+  }, []);
+
   const animate = useCallback(() => {
     if (!sceneRef.current || !cameraRef.current || !rendererRef.current || !materialRef.current) {
       return;
@@ -573,7 +601,9 @@ export default function WebGLCanvas() {
     // Generative pre-pass: render the abstract pattern into the target, which the
     // main material samples as tDiffuse. Skipped when paused and nothing changed.
     const genState = useDitherStore.getState();
-    if (genState.isWaveField) {
+    if (genState.isGlass) {
+      renderGlassPrePass(performance.now() * 0.001);
+    } else if (genState.isWaveField) {
       renderWavePrePass(performance.now() * 0.001);
     } else if (genState.is3D) {
       render3DPrePass(performance.now() * 0.001);
@@ -606,7 +636,7 @@ export default function WebGLCanvas() {
     }
 
     animationFrameRef.current = requestAnimationFrame(animate);
-  }, [render3DPrePass, renderWavePrePass]);
+  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass]);
 
   // Render ONE deterministic frame with time forced to `uTimeSeconds`. Used by the
   // exporter to produce seamless loops (frame i at phase 2π·i/N) at any FPS.
@@ -617,7 +647,9 @@ export default function WebGLCanvas() {
     if (!renderer || !scene || !cam) return;
 
     const s = useDitherStore.getState();
-    if (s.isWaveField) {
+    if (s.isGlass) {
+      renderGlassPrePass(uTimeSeconds);
+    } else if (s.isWaveField) {
       renderWavePrePass(uTimeSeconds);
     } else if (s.is3D) {
       render3DPrePass(uTimeSeconds);
@@ -634,7 +666,7 @@ export default function WebGLCanvas() {
     }
     if (materialRef.current) materialRef.current.uniforms.uTime.value = uTimeSeconds;
     renderer.render(scene, cam);
-  }, [render3DPrePass, renderWavePrePass]);
+  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass]);
 
   const startAnimation = useCallback(() => {
     if (animationFrameRef.current) {
@@ -826,6 +858,64 @@ export default function WebGLCanvas() {
     generatorDirtyRef.current = true;
     startAnimation();
   }, [applyWaveSettings, createMaterial, startAnimation]);
+
+  // Push glass-source appearance uniforms (colours read raw sRGB, like the generator).
+  const applyGlassSettings = useCallback(() => {
+    const scr = glassRef.current;
+    if (!scr) return;
+    const s = useDitherStore.getState();
+    const u = scr.material.uniforms;
+    u.uRibs.value = s.glassRibs;
+    u.uRefract.value = s.glassRefract;
+    u.uFrost.value = s.glassFrost;
+    u.uSheen.value = s.glassSheen;
+    u.uDispersion.value = s.glassDispersion;
+    u.uWavy.value = s.glassWavy;
+    u.uAngle.value = s.glassAngle;
+    const setCol = (key: string, hex: string) => {
+      const [r, g, b] = hexToRgb01(hex);
+      (u[key].value as THREE.Vector3).set(r, g, b);
+    };
+    setCol('uColorA', s.glassColorA);
+    setCol('uColorB', s.glassColorB);
+    setCol('uColorC', s.glassColorC);
+    setCol('uBg', s.glassBg);
+    generatorDirtyRef.current = true;
+  }, []);
+
+  // Initialize / resize the glass source (no uploaded file required)
+  const initGlass = useCallback(() => {
+    if (!sceneRef.current || !rendererRef.current) return;
+    const s = useDitherStore.getState();
+    const w = s.outputWidth, h = s.outputHeight;
+    rendererRef.current.setSize(w, h);
+    if (!generatorTargetRef.current) {
+      generatorTargetRef.current = new THREE.WebGLRenderTarget(w, h, {
+        minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+      });
+    } else {
+      generatorTargetRef.current.setSize(w, h);
+      generatorTargetRef.current.texture.minFilter = THREE.LinearFilter;
+      generatorTargetRef.current.texture.magFilter = THREE.LinearFilter;
+      generatorTargetRef.current.texture.needsUpdate = true;
+    }
+    if (!sceneGlassRef.current) sceneGlassRef.current = new THREE.Scene();
+    if (!glassRef.current) {
+      const g = createGlassField();
+      glassRef.current = g;
+      sceneGlassRef.current.add(g.mesh);
+    }
+    applyGlassSettings();
+    const mainMaterial = createMaterial(generatorTargetRef.current.texture, w, h);
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    if (meshRef.current) { sceneRef.current.remove(meshRef.current); meshRef.current.geometry.dispose(); }
+    const quad = new THREE.Mesh(geometry, mainMaterial);
+    meshRef.current = quad; sceneRef.current.add(quad);
+    setResolution({ width: w, height: h });
+    setHasImage(true);
+    generatorDirtyRef.current = true;
+    startAnimation();
+  }, [applyGlassSettings, createMaterial, startAnimation]);
 
   // Load image file
   const loadImage = useCallback((file: File) => {
@@ -1070,7 +1160,7 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isGenerative) {
       initGenerative();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass) {
       // Left generative mode with no other source loaded → stop the loop, show the prompt
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
@@ -1082,7 +1172,7 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.is3D) {
       init3D();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().isWaveField) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass) {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
@@ -1093,12 +1183,23 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isWaveField) {
       initWave();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isGlass) {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ditherState.isWaveField, ditherState.outputWidth, ditherState.outputHeight, initWave]);
+
+  // Enable / resize / tear down the glass source
+  useEffect(() => {
+    if (ditherState.isGlass) {
+      initGlass();
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField) {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      setHasImage(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ditherState.isGlass, ditherState.outputWidth, ditherState.outputHeight, initGlass]);
 
   // Rebuild the 3D mesh / material when its appearance changes
   useEffect(() => {
@@ -1116,6 +1217,14 @@ export default function WebGLCanvas() {
       ditherState.waveLineCount, ditherState.waveLineStrength, ditherState.waveGradient,
       ditherState.waveColorLow, ditherState.waveColorMid, ditherState.waveColorHigh,
       ditherState.waveColorFog, ditherState.waveBg]);
+
+  // Live-update glass-source appearance uniforms (speed read each frame in the pre-pass)
+  useEffect(() => {
+    if (ditherState.isGlass) applyGlassSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ditherState.glassRibs, ditherState.glassRefract, ditherState.glassFrost, ditherState.glassSheen,
+      ditherState.glassDispersion, ditherState.glassWavy, ditherState.glassAngle,
+      ditherState.glassColorA, ditherState.glassColorB, ditherState.glassColorC, ditherState.glassBg]);
 
   // Live-update generator uniforms as generative settings change (independent of
   // the dither palette, which is driven by the main uniform-update effect below)
@@ -1356,7 +1465,9 @@ export default function WebGLCanvas() {
     const cam = cameraRef.current;
     if (!renderer || !scene || !cam) return;
     const s = useDitherStore.getState();
-    if (s.isWaveField) {
+    if (s.isGlass) {
+      renderGlassPrePass(performance.now() * 0.001);
+    } else if (s.isWaveField) {
       renderWavePrePass(performance.now() * 0.001);
     } else if (s.is3D) {
       render3DPrePass(performance.now() * 0.001);
@@ -1372,7 +1483,7 @@ export default function WebGLCanvas() {
     }
     if (materialRef.current) materialRef.current.uniforms.uTime.value = performance.now() * 0.001;
     renderer.render(scene, cam);
-  }, [render3DPrePass, renderWavePrePass]);
+  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass]);
 
   useEffect(() => {
     generatorExport.renderExportFrame = renderExportFrame;

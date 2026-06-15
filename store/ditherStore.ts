@@ -58,6 +58,21 @@ export interface DitherState {
   waveCamDistance: number; // camera distance
   waveFov: number; // camera field of view
 
+  // Glass source — fluted/ribbed glass refraction (Three.js)
+  isGlass: boolean;
+  glassRibs: number;       // ribs across
+  glassRefract: number;    // lens bend strength
+  glassFrost: number;      // blur / roughness
+  glassSheen: number;      // fresnel edge sheen
+  glassDispersion: number; // RGB chromatic split
+  glassWavy: number;       // bow the ribs
+  glassAngle: number;      // 0 vertical, 1 horizontal
+  glassSpeed: number;      // drift speed (loop = 2π/speed)
+  glassColorA: string;     // subject glow colours
+  glassColorB: string;
+  glassColorC: string;
+  glassBg: string;         // backdrop behind the glass
+
   // Saved colour swatches (persisted, reusable across all colour pickers)
   savedColors: string[];
 
@@ -280,6 +295,7 @@ export interface DitherState {
   setThreeDEnabled: (enabled: boolean) => void;
   setWaveFieldEnabled: (enabled: boolean) => void;
   setWaveType: (type: number) => void;
+  setGlassEnabled: (enabled: boolean) => void;
   addSavedColor: (hex: string) => void;
   removeSavedColor: (hex: string) => void;
   setGenerativeSetting: (key: string, value: number | boolean | string) => void;
@@ -329,6 +345,20 @@ const defaultState = {
   waveCamHeight: 8,
   waveCamDistance: 36,
   waveFov: 42,
+
+  isGlass: false,
+  glassRibs: 22,
+  glassRefract: 0.7,
+  glassFrost: 0.45,
+  glassSheen: 0.6,
+  glassDispersion: 0.5,
+  glassWavy: 0.0,
+  glassAngle: 0,
+  glassSpeed: 0.4,
+  glassColorA: '#2f6bff',
+  glassColorB: '#7a45ff',
+  glassColorC: '#16348f',
+  glassBg: '#05060c',
 
   savedColors: loadSavedColors(),
 
@@ -517,7 +547,7 @@ export const useDitherStore = create<DitherState>((set) => ({
 
   setFile: (file, isVideo) => set({ ...defaultState, currentFile: file, isVideo }),
 
-  setWebcam: (enabled) => set(enabled ? { isWebcam: true, isGenerative: false, is3D: false, isWaveField: false } : { isWebcam: false }),
+  setWebcam: (enabled) => set(enabled ? { isWebcam: true, isGenerative: false, is3D: false, isWaveField: false, isGlass: false } : { isWebcam: false }),
 
   setVideoDuration: (duration) => set({ videoDuration: duration }),
 
@@ -580,6 +610,19 @@ export const useDitherStore = create<DitherState>((set) => ({
     waveCamHeight: state.waveCamHeight,
     waveCamDistance: state.waveCamDistance,
     waveFov: state.waveFov,
+    isGlass: state.isGlass,
+    glassRibs: state.glassRibs,
+    glassRefract: state.glassRefract,
+    glassFrost: state.glassFrost,
+    glassSheen: state.glassSheen,
+    glassDispersion: state.glassDispersion,
+    glassWavy: state.glassWavy,
+    glassAngle: state.glassAngle,
+    glassSpeed: state.glassSpeed,
+    glassColorA: state.glassColorA,
+    glassColorB: state.glassColorB,
+    glassColorC: state.glassColorC,
+    glassBg: state.glassBg,
     savedColors: state.savedColors,
     outputWidth: state.outputWidth,
     outputHeight: state.outputHeight,
@@ -650,18 +693,23 @@ export const useDitherStore = create<DitherState>((set) => ({
       // Tasteful baseline so a bare GENERATE looks good: full colour (not the
       // app's B&W duotone) with enough levels to keep the gradient smooth.
       // Presets can still override colour mode / levels.
-      ? { isGenerative: true, is3D: false, isWaveField: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { isGenerative: true, is3D: false, isWaveField: false, isGlass: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
       : { isGenerative: false }),
 
   setThreeDEnabled: (enabled) =>
     set(enabled
-      ? { is3D: true, isGenerative: false, isWaveField: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { is3D: true, isGenerative: false, isWaveField: false, isGlass: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
       : { is3D: false }),
 
   setWaveFieldEnabled: (enabled) =>
     set(enabled
-      ? { isWaveField: true, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { isWaveField: true, is3D: false, isGenerative: false, isGlass: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
       : { isWaveField: false }),
+
+  setGlassEnabled: (enabled) =>
+    set(enabled
+      ? { isGlass: true, isWaveField: false, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      : { isGlass: false }),
 
   addSavedColor: (hex) => set((state) => {
     const c = hex.toLowerCase();
