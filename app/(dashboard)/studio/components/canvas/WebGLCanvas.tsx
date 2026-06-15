@@ -977,6 +977,8 @@ export default function WebGLCanvas() {
       fov: s.layersFov,
       motion: s.layersMotion,
       motionAmt: s.layersMotionAmt,
+      variety: s.layersVariety,
+      seed: s.layersSeed,
       dir: s.layersDir,
       tint: hexToRgb01(s.layersColorOuter),
       glowA: hexToRgb01(s.layersColorInner),
@@ -1347,7 +1349,7 @@ export default function WebGLCanvas() {
   }, [ditherState.layersLayout, ditherState.layersDensity, ditherState.layersRadius, ditherState.layersTilt,
       ditherState.layersThickness, ditherState.layersSpacing, ditherState.layersLineWidth,
       ditherState.layersGlow, ditherState.layersReflect, ditherState.layersOpacity, ditherState.layersFov,
-      ditherState.layersMotion, ditherState.layersMotionAmt, ditherState.layersDir,
+      ditherState.layersMotion, ditherState.layersMotionAmt, ditherState.layersVariety, ditherState.layersSeed, ditherState.layersDir,
       ditherState.layersColorOuter, ditherState.layersColorInner, ditherState.layersEdge, ditherState.layersBg]);
 
   // Load / clear the uploaded background image that the glass refracts.

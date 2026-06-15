@@ -94,6 +94,8 @@ export interface DitherState {
   layersFov: number;       // camera FOV (zoom)
   layersMotion: number;    // 0 sway·1 spin·2 tumble·3 float·4 wave·5 breathe·6 orbit·7 figure-8·8 pendulum
   layersMotionAmt: number; // motion amplitude 0..1
+  layersVariety: boolean;  // per-object mixed shapes + animations
+  layersSeed: number;      // shuffles the variety assignment
   layersDir: number;       // +1 / -1 motion direction
   layersSpeed: number;     // animation speed (loop = 2π/speed)
   layersColorOuter: string; // glass tint
@@ -409,6 +411,8 @@ const defaultState = {
   layersFov: 46,
   layersMotion: 6,
   layersMotionAmt: 0.5,
+  layersVariety: true,
+  layersSeed: 1,
   layersDir: 1,
   layersSpeed: 0.4,
   layersColorOuter: '#2a2f6e',
@@ -475,7 +479,7 @@ const defaultState = {
   imageLayerFit: 0, // cover
 
   // Algorithm state
-  currentAlgorithm: 1, // Floyd-Steinberg default
+  currentAlgorithm: 0, // None (no dithering) — user opts in
   multiAlgoEnabled: false,
   secondAlgorithm: 0,
   algoBlendMode: 0,
@@ -699,6 +703,8 @@ export const useDitherStore = create<DitherState>((set) => ({
     layersFov: state.layersFov,
     layersMotion: state.layersMotion,
     layersMotionAmt: state.layersMotionAmt,
+    layersVariety: state.layersVariety,
+    layersSeed: state.layersSeed,
     layersDir: state.layersDir,
     layersSpeed: state.layersSpeed,
     layersColorOuter: state.layersColorOuter,

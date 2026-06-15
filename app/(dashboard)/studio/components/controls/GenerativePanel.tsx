@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useDitherStore } from '@/store/ditherStore';
 import { extractPalette } from '@/lib/utils/colorExtractor';
 import { Collapsible } from './Collapsible';
+import ColorPopover from './ColorPopover';
 
 const PATTERNS = [
   { value: 0, label: 'Linear Gradient' },
@@ -437,16 +438,7 @@ function Slider({ label, value, min, max, step, onChange, fmt }: {
 }
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-white/55">{label}</span>
-      <div className="relative w-8 h-8">
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10" />
-        <div className="w-8 h-8 border border-white/10 rounded-xl" style={{ backgroundColor: value }} />
-      </div>
-    </div>
-  );
+  return <ColorPopover label={label} value={value} onChange={onChange} />;
 }
 
 export default function GenerativePanel() {
@@ -745,10 +737,9 @@ export default function GenerativePanel() {
         <div className="space-y-2">
           {generativeColors.map((color, i) => (
             <div key={i} className="flex items-center gap-2">
-              <div className="relative w-8 h-8 flex-shrink-0">
-                <input type="color" value={color} onChange={(e) => setGenerativeColor(i, e.target.value)}
-                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10" />
-                <div className="w-8 h-8 border border-white/10 rounded-xl" style={{ backgroundColor: color }} />
+              <div className="w-8 h-8 flex-shrink-0">
+                <ColorPopover label={`Stop ${i + 1}`} value={color} onChange={(v) => setGenerativeColor(i, v)}
+                  variant="swatch" className="w-8 h-8 border border-white/10 rounded-xl hover:border-white/40 transition-colors" />
               </div>
               <span className="text-[10px] text-white/55 font-mono flex-1">{color.toUpperCase()}</span>
               {generativeColors.length > 2 && (

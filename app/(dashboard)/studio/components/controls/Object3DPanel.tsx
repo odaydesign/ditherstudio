@@ -2,6 +2,7 @@
 
 import { useDitherStore } from '@/store/ditherStore';
 import { Collapsible } from './Collapsible';
+import ColorPopover from './ColorPopover';
 
 const sliderClass =
   "w-full h-[2px] bg-white/20 outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer";
@@ -25,16 +26,7 @@ function Slider({ label, value, min, max, step, onChange, fmt }: {
 }
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-white/55">{label}</span>
-      <div className="relative w-8 h-8">
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10" />
-        <div className="w-8 h-8 border border-white/10 rounded-xl" style={{ backgroundColor: value }} />
-      </div>
-    </div>
-  );
+  return <ColorPopover label={label} value={value} onChange={onChange} />;
 }
 
 const SHAPES = [

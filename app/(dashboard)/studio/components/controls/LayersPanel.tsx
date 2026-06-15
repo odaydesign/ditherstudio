@@ -29,13 +29,13 @@ export default function LayersPanel() {
   const {
     layersLayout, layersDensity, layersSpacing, layersThickness, layersRadius, layersTilt,
     layersLineWidth, layersGlow, layersReflect, layersOpacity, layersFov,
-    layersMotion, layersMotionAmt, layersDir, layersSpeed,
+    layersMotion, layersMotionAmt, layersVariety, layersSeed, layersDir, layersSpeed,
     layersColorOuter, layersColorInner, layersEdge, layersBg,
     setGlobalSetting,
   } = useDitherStore();
   const set = setGlobalSetting;
   const loopSecs = (2 * Math.PI) / Math.max(layersSpeed, 0.05);
-  const rotational = layersMotion === 1 || layersMotion === 2; // spin / tumble
+  const rotational = !layersVariety && (layersMotion === 1 || layersMotion === 2); // spin / tumble
 
   return (
     <div className="space-y-1">
@@ -80,13 +80,30 @@ export default function LayersPanel() {
 
       <Collapsible title="MOTION" defaultOpen={true}>
         <div className="space-y-4">
-          <div>
-            <label className="text-xs text-white/55 block mb-2">Animation</label>
-            <select value={layersMotion} onChange={(e) => set('layersMotion', Number(e.target.value))}
-              className="w-full p-2 bg-white/[0.06] border border-white/10 rounded-xl text-xs text-white/90 font-sans cursor-pointer focus:outline-none focus:border-white/40">
-              {MOTIONS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-            </select>
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-white/55">Per-object variety</label>
+            <button onClick={() => set('layersVariety', !layersVariety)} role="switch" aria-checked={layersVariety}
+              className={`relative w-9 h-5 rounded-full transition-colors ${layersVariety ? 'bg-white' : 'bg-white/15'}`}>
+              <span className={`absolute top-0.5 w-4 h-4 rounded-full transition-transform ${layersVariety ? 'translate-x-4 bg-[#0b0b0d]' : 'translate-x-0.5 bg-white'}`} />
+            </button>
           </div>
+          {layersVariety ? (
+            <div>
+              <label className="text-xs text-white/55 block mb-2">Each object gets its own shape &amp; motion.</label>
+              <button onClick={() => set('layersSeed', Math.floor(Math.random() * 9999) + 1)}
+                className="w-full p-2 text-[11px] bg-white/[0.05] border border-white/10 rounded-xl text-white/80 hover:border-white/40 hover:text-white transition-colors">
+                ⟳ Shuffle mix (seed {layersSeed})
+              </button>
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs text-white/55 block mb-2">Animation</label>
+              <select value={layersMotion} onChange={(e) => set('layersMotion', Number(e.target.value))}
+                className="w-full p-2 bg-white/[0.06] border border-white/10 rounded-xl text-xs text-white/90 font-sans cursor-pointer focus:outline-none focus:border-white/40">
+                {MOTIONS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+              </select>
+            </div>
+          )}
           <Slider label={rotational ? 'Turns / Tilt' : 'Amount'} value={layersMotionAmt} min={0} max={1} step={0.02}
             onChange={(v) => set('layersMotionAmt', v)} fmt={(v) => v.toFixed(2)} />
           <Slider label="Speed" value={layersSpeed} min={0.05} max={1.5} step={0.05}

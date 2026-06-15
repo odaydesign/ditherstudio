@@ -24,8 +24,9 @@ function SliderRow({ label, value, max = 100, onChange, grad }: {
   );
 }
 
-export default function ColorPopover({ label, value, onChange }: {
+export default function ColorPopover({ label, value, onChange, variant = 'row', className }: {
   label: string; value: string; onChange: (hex: string) => void;
+  variant?: 'row' | 'block' | 'swatch'; className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -78,17 +79,7 @@ export default function ColorPopover({ label, value, onChange }: {
     setOpen((o) => !o);
   };
 
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-white/55">{label}</span>
-      <button
-        ref={triggerRef}
-        onClick={toggle}
-        className="w-8 h-8 border border-white/10 rounded-xl hover:border-white/40"
-        style={{ backgroundColor: hex }}
-        aria-label={`${label} colour`}
-      />
-      {open && mounted && createPortal(
+  const popover = open && mounted && createPortal(
         <>
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
           <div
@@ -162,7 +153,42 @@ export default function ColorPopover({ label, value, onChange }: {
           </div>
         </>,
         document.body,
-      )}
+      );
+
+  if (variant === 'swatch') {
+    return (
+      <>
+        <button ref={triggerRef} onClick={toggle} style={{ backgroundColor: hex }}
+          aria-label={`${label} colour`}
+          className={className || 'w-full aspect-square border border-white/10 rounded-md hover:border-white/40 transition-colors'} />
+        {popover}
+      </>
+    );
+  }
+
+  if (variant === 'block') {
+    return (
+      <div>
+        <label className="block text-xs text-white/55 mb-2">{label}</label>
+        <button ref={triggerRef} onClick={toggle} style={{ backgroundColor: hex }}
+          aria-label={`${label} colour`}
+          className={className || 'w-full h-10 border border-white/10 rounded-xl hover:border-white/40 transition-colors'} />
+        {popover}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-white/55">{label}</span>
+      <button
+        ref={triggerRef}
+        onClick={toggle}
+        className="w-8 h-8 border border-white/10 rounded-xl hover:border-white/40"
+        style={{ backgroundColor: hex }}
+        aria-label={`${label} colour`}
+      />
+      {popover}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useDitherStore } from '@/store/ditherStore';
 import { paletteCategories, getPaletteById } from '@/lib/palettes/retroPalettes';
+import ColorPopover from './ColorPopover';
 import { algorithms } from '@/lib/three/algorithms';
 import { Collapsible } from './Collapsible';
 
@@ -229,10 +230,8 @@ export default function SimplifiedSettings() {
 
   const currentAlgorithm = algorithms.find(a => a.shaderValue === algorithm);
 
-  useEffect(() => {
-    setAlgorithm(1); // Default to Floyd-Steinberg
-    setColorMode(2);
-  }, [setAlgorithm, setColorMode]);
+  // No forced defaults — the source loads undithered (algorithm "None"); the user
+  // opts into an algorithm/colour mode. Reset all restores this clean baseline.
 
   const sliderClass = "w-full h-[2px] bg-white/20 outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer";
 
@@ -652,30 +651,8 @@ export default function SimplifiedSettings() {
 
             {/* Colors */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-white/55 mb-2">Shape Color</label>
-                <div className="relative">
-                  <input
-                    type="color"
-                    value={asciiFgColor}
-                    onChange={(e) => setAsciiSetting('asciiFgColor', e.target.value)}
-                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
-                  />
-                  <div className="w-full h-8 border border-white/10 rounded-xl" style={{ backgroundColor: asciiFgColor }} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-white/55 mb-2">Background</label>
-                <div className="relative">
-                  <input
-                    type="color"
-                    value={asciiBgColor}
-                    onChange={(e) => setAsciiSetting('asciiBgColor', e.target.value)}
-                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
-                  />
-                  <div className="w-full h-8 border border-white/10 rounded-xl" style={{ backgroundColor: asciiBgColor }} />
-                </div>
-              </div>
+              <ColorPopover label="Shape Color" value={asciiFgColor} onChange={(v) => setAsciiSetting('asciiFgColor', v)} variant="block" />
+              <ColorPopover label="Background" value={asciiBgColor} onChange={(v) => setAsciiSetting('asciiBgColor', v)} variant="block" />
             </div>
 
             <div className="flex items-center justify-between">
@@ -917,30 +894,8 @@ export default function SimplifiedSettings() {
 
         {/* Ink and BG Color Pickers */}
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <div>
-            <label className="block text-xs text-white/55 mb-2">Ink</label>
-            <div className="relative">
-              <input
-                type="color"
-                value={duotoneDark}
-                onChange={(e) => setGlobalSetting('duotoneDark', e.target.value)}
-                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
-              />
-              <div className="w-full h-10 border border-white/10 rounded-xl" style={{ backgroundColor: duotoneDark }} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-white/55 mb-2">Background</label>
-            <div className="relative">
-              <input
-                type="color"
-                value={duotoneLight}
-                onChange={(e) => setGlobalSetting('duotoneLight', e.target.value)}
-                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
-              />
-              <div className="w-full h-10 border border-white/10 rounded-xl" style={{ backgroundColor: duotoneLight }} />
-            </div>
-          </div>
+          <ColorPopover label="Ink" value={duotoneDark} onChange={(v) => setGlobalSetting('duotoneDark', v)} variant="block" />
+          <ColorPopover label="Background" value={duotoneLight} onChange={(v) => setGlobalSetting('duotoneLight', v)} variant="block" />
         </div>
 
         {/* Color Space */}

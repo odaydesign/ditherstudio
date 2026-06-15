@@ -965,8 +965,8 @@ export default function DitherStudio() {
           <button onClick={() => useDitherStore.getState().surpriseMe()} title="Surprise me" className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10">
             <IconShuffle />
           </button>
-          <button onClick={() => { useDitherStore.getState().resetAll(); setSelectedPresetId(''); }} title="Reset all" className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10">
-            <IconReset />
+          <button onClick={() => { useDitherStore.getState().resetAll(); setSelectedPresetId(''); }} title="Reset all settings" className="flex items-center gap-1.5 pl-2.5 pr-3 h-8 rounded-lg text-white/80 text-xs font-medium border border-white/15 hover:bg-white/10 hover:text-white transition-colors">
+            <IconReset />Reset
           </button>
           <button onClick={() => exportImage('png')} title="Quick export PNG" className="flex items-center gap-1.5 pl-2.5 pr-3 h-8 rounded-lg bg-white text-[#0b0b0d] text-xs font-medium hover:opacity-90 active:scale-[0.98] transition-all">
             <IconExport />Export
