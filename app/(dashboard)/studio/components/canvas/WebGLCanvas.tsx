@@ -876,6 +876,7 @@ export default function WebGLCanvas() {
     u.uDispersion.value = s.glassDispersion;
     u.uWavy.value = s.glassWavy;
     u.uAngle.value = s.glassAngle;
+    u.uMotion.value = s.glassMotion;
     const setCol = (key: string, hex: string) => {
       const [r, g, b] = hexToRgb01(hex);
       (u[key].value as THREE.Vector3).set(r, g, b);
@@ -1228,8 +1229,8 @@ export default function WebGLCanvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ditherState.glassRibs, ditherState.glassRefract, ditherState.glassIOR, ditherState.glassReflect,
       ditherState.glassFrost, ditherState.glassSheen, ditherState.glassDispersion, ditherState.glassWavy,
-      ditherState.glassAngle, ditherState.glassColorA, ditherState.glassColorB, ditherState.glassColorC,
-      ditherState.glassBg]);
+      ditherState.glassAngle, ditherState.glassMotion, ditherState.glassColorA, ditherState.glassColorB,
+      ditherState.glassColorC, ditherState.glassBg]);
 
   // Load / clear the uploaded background image that the glass refracts.
   useEffect(() => {

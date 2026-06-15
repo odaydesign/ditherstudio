@@ -69,7 +69,8 @@ export interface DitherState {
   glassDispersion: number; // RGB chromatic split
   glassWavy: number;       // bow the ribs
   glassAngle: number;      // 0 vertical, 1 horizontal
-  glassSpeed: number;      // drift speed (loop = 2π/speed)
+  glassMotion: number;     // 0 drift, 1 flow, 2 shimmer, 3 ripple, 4 wobble
+  glassSpeed: number;      // animation speed (loop = 2π/speed)
   glassColorA: string;     // subject glow colours
   glassColorB: string;
   glassColorC: string;
@@ -361,6 +362,7 @@ const defaultState = {
   glassDispersion: 0.5,
   glassWavy: 0.0,
   glassAngle: 0,
+  glassMotion: 1,
   glassSpeed: 0.4,
   glassColorA: '#2f6bff',
   glassColorB: '#7a45ff',
@@ -630,6 +632,7 @@ export const useDitherStore = create<DitherState>((set) => ({
     glassDispersion: state.glassDispersion,
     glassWavy: state.glassWavy,
     glassAngle: state.glassAngle,
+    glassMotion: state.glassMotion,
     glassSpeed: state.glassSpeed,
     glassColorA: state.glassColorA,
     glassColorB: state.glassColorB,

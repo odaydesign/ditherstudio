@@ -39,6 +39,7 @@ const fragmentShader = /* glsl */ `
   uniform float uDispersion;  // RGB chromatic split
   uniform float uWavy;        // bow the ribs
   uniform float uAngle;       // 0 vertical ribs, 1 horizontal
+  uniform float uMotion;      // 0 drift, 1 flow, 2 shimmer, 3 ripple, 4 wobble
   uniform vec3 uColorA;
   uniform vec3 uColorB;
   uniform vec3 uColorC;
@@ -95,9 +96,24 @@ const fragmentShader = /* glsl */ `
     float perp = vert ? uv.y : uv.x;
     a += sin(perp * 6.28318 + t) * uWavy * 0.05;          // bow the ribs
 
+    // Glass motion — animates the distortion itself (works over a static image too).
+    // All time terms are integer harmonics of uPhase, so it loops at 2π.
+    int motion = int(uMotion + 0.5);
+    float ribCoord = a * uRibs;
+    float curv = uCurvature;
+    if (motion == 1) {                                    // FLOW — ribs scroll (8 ribs / loop)
+      ribCoord += (t / 6.28318) * 8.0;
+    } else if (motion == 2) {                             // SHIMMER — lens breathes
+      curv *= 0.6 + 0.55 * (0.5 + 0.5 * sin(t));
+    } else if (motion == 3) {                             // RIPPLE — travelling wave along ribs
+      ribCoord += sin(perp * 9.0 - t * 2.0) * 0.6;
+    } else if (motion == 4) {                             // WOBBLE — ribs sway
+      ribCoord += sin(t) * 0.9 + sin(perp * 3.0 + t) * 0.5;
+    }
+
     // Cylindrical-lens surface normal across the rib.
-    float ribF = (fract(a * uRibs) - 0.5) * 2.0;          // -1..1
-    float nx = clamp(ribF * uCurvature, -0.999, 0.999);
+    float ribF = (fract(ribCoord) - 0.5) * 2.0;           // -1..1
+    float nx = clamp(ribF * curv, -0.999, 0.999);
     float nz = sqrt(max(0.0001, 1.0 - nx * nx));
     vec3 N = normalize(vert ? vec3(nx, 0.0, nz) : vec3(0.0, nx, nz));
     vec3 I = vec3(0.0, 0.0, -1.0);                         // view ray into the glass
@@ -113,7 +129,7 @@ const fragmentShader = /* glsl */ `
     vec3 rR = refract(I, N, eta + dEta);
     vec3 rG = refract(I, N, eta);
     vec3 rB = refract(I, N, eta - dEta);
-    float depth = 0.18 * uCurvature;
+    float depth = 0.18 * curv;
     vec3 refr = vec3(0.0); float wsum = 0.0;
     for (int i = -2; i <= 2; i++) {
       float fo = float(i) / 2.0 * uFrost * 0.02;
@@ -167,6 +183,7 @@ export function createGlassField(): GlassField {
       uDispersion: { value: 0.5 },
       uWavy: { value: 0.0 },
       uAngle: { value: 0 },
+      uMotion: { value: 0 },
       uColorA: { value: lin('#2f6bff') },
       uColorB: { value: lin('#7a45ff') },
       uColorC: { value: lin('#16348f') },

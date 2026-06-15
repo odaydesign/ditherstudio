@@ -27,7 +27,7 @@ function Slider({ label, value, min, max, step, onChange, fmt }: {
 export default function GlassPanel() {
   const {
     glassRibs, glassRefract, glassIOR, glassReflect, glassFrost, glassSheen, glassDispersion,
-    glassWavy, glassAngle, glassSpeed, glassColorA, glassColorB, glassColorC, glassBg, glassBgImage,
+    glassWavy, glassAngle, glassMotion, glassSpeed, glassColorA, glassColorB, glassColorC, glassBg, glassBgImage,
     setGlobalSetting,
   } = useDitherStore();
   const set = setGlobalSetting;
@@ -78,9 +78,20 @@ export default function GlassPanel() {
               <button onClick={() => set('glassAngle', 1)} className={`p-2 text-[11px] border rounded-xl transition-colors ${glassAngle >= 0.5 ? 'bg-white text-[#0b0b0d] border-white/30' : 'bg-white/[0.05] text-white/70 border-white/10 hover:border-white/40'}`}>Horizontal</button>
             </div>
           </div>
-          <Slider label="Drift Speed" value={glassSpeed} min={0.05} max={1.5} step={0.05}
+          <div>
+            <label className="text-xs text-white/55 block mb-2">Motion</label>
+            <select value={glassMotion} onChange={(e) => set('glassMotion', Number(e.target.value))}
+              className="w-full p-2 bg-white/[0.06] border border-white/10 rounded-xl text-xs text-white/90 font-sans cursor-pointer focus:outline-none focus:border-white/40">
+              <option value={0}>Drift (subject)</option>
+              <option value={1}>Flow (ribs scroll)</option>
+              <option value={2}>Shimmer (breathe)</option>
+              <option value={3}>Ripple</option>
+              <option value={4}>Wobble</option>
+            </select>
+          </div>
+          <Slider label="Animation Speed" value={glassSpeed} min={0.05} max={1.5} step={0.05}
             onChange={(v) => set('glassSpeed', v)} fmt={(v) => v.toFixed(2)} />
-          <p className="text-[10px] text-white/40">Seamless loop ≈ {loopSecs.toFixed(1)}s.</p>
+          <p className="text-[10px] text-white/40">Animates over uploaded images too. Seamless loop ≈ {loopSecs.toFixed(1)}s.</p>
         </div>
       </Collapsible>
 
