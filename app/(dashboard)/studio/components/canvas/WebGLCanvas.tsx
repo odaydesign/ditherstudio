@@ -9,6 +9,7 @@ import { generatorShader } from '@/lib/three/shaders/generatorShader';
 import { generatorExport } from '@/lib/three/generatorController';
 import { createWaveField, createWaveScreen, type WaveField, type WaveScreen } from '@/lib/three/waveField';
 import { createGlassField, type GlassField } from '@/lib/three/glassField';
+import { createLayersField, type LayersField } from '@/lib/three/layersField';
 
 // The fragment shader declares `uniform vec3 uPaletteColors[16]` — a fixed-size
 // array. Three.js uploads all 16 slots and calls .toArray() on each element, so
@@ -172,6 +173,8 @@ export default function WebGLCanvas() {
   const sceneGlassRef = useRef<THREE.Scene | null>(null);
   const glassRef = useRef<GlassField | null>(null);
   const glassBgTextureRef = useRef<THREE.Texture | null>(null);
+  const sceneLayersRef = useRef<THREE.Scene | null>(null);
+  const layersRef = useRef<LayersField | null>(null);
   // Text / logo overlay (composited into the same canvas so it exports)
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayTextureRef = useRef<THREE.CanvasTexture | null>(null);
@@ -234,6 +237,7 @@ export default function WebGLCanvas() {
       waveScreenRef.current?.dispose();
       glassRef.current?.dispose();
       glassBgTextureRef.current?.dispose();
+      layersRef.current?.dispose();
     };
   }, []);
 
@@ -580,6 +584,34 @@ export default function WebGLCanvas() {
     renderer.setRenderTarget(null);
   }, []);
 
+  // Render the layers source — a real 3D glass-slab scene with its own perspective
+  // camera — into the source target (tDiffuse), full-res. The target is encoded to
+  // sRGB for this pass so the PBR-lit result round-trips through the raw-sampled
+  // dither pipeline (additive neon uses a raw ShaderMaterial → exact hue either way).
+  const renderLayersPrePass = useCallback((uTimeSeconds: number) => {
+    const renderer = rendererRef.current;
+    const tgt = generatorTargetRef.current;
+    const scr = layersRef.current;
+    if (!renderer || !tgt || !scr) return;
+    const s = useDitherStore.getState();
+    const rw = renderer.domElement.width, rh = renderer.domElement.height;
+    if (tgt.width !== rw || tgt.height !== rh) {
+      tgt.setSize(rw, rh);
+      tgt.texture.minFilter = THREE.LinearFilter; tgt.texture.magFilter = THREE.LinearFilter;
+      tgt.texture.needsUpdate = true;
+    }
+    const cam = scr.camera;
+    const aspect = rw / Math.max(rh, 1);
+    if (Math.abs(cam.aspect - aspect) > 1e-4) { cam.aspect = aspect; cam.updateProjectionMatrix(); }
+    scr.update(uTimeSeconds * s.layersSpeed);
+    const prevCS = tgt.texture.colorSpace;
+    tgt.texture.colorSpace = THREE.SRGBColorSpace;
+    renderer.setRenderTarget(tgt);
+    renderer.render(scr.scene, cam);
+    renderer.setRenderTarget(null);
+    tgt.texture.colorSpace = prevCS;
+  }, []);
+
   const animate = useCallback(() => {
     if (!sceneRef.current || !cameraRef.current || !rendererRef.current || !materialRef.current) {
       return;
@@ -603,7 +635,9 @@ export default function WebGLCanvas() {
     // Generative pre-pass: render the abstract pattern into the target, which the
     // main material samples as tDiffuse. Skipped when paused and nothing changed.
     const genState = useDitherStore.getState();
-    if (genState.isGlass) {
+    if (genState.isLayers) {
+      renderLayersPrePass(performance.now() * 0.001);
+    } else if (genState.isGlass) {
       renderGlassPrePass(performance.now() * 0.001);
     } else if (genState.isWaveField) {
       renderWavePrePass(performance.now() * 0.001);
@@ -638,7 +672,7 @@ export default function WebGLCanvas() {
     }
 
     animationFrameRef.current = requestAnimationFrame(animate);
-  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass]);
+  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass, renderLayersPrePass]);
 
   // Render ONE deterministic frame with time forced to `uTimeSeconds`. Used by the
   // exporter to produce seamless loops (frame i at phase 2π·i/N) at any FPS.
@@ -649,7 +683,9 @@ export default function WebGLCanvas() {
     if (!renderer || !scene || !cam) return;
 
     const s = useDitherStore.getState();
-    if (s.isGlass) {
+    if (s.isLayers) {
+      renderLayersPrePass(uTimeSeconds);
+    } else if (s.isGlass) {
       renderGlassPrePass(uTimeSeconds);
     } else if (s.isWaveField) {
       renderWavePrePass(uTimeSeconds);
@@ -668,7 +704,7 @@ export default function WebGLCanvas() {
     }
     if (materialRef.current) materialRef.current.uniforms.uTime.value = uTimeSeconds;
     renderer.render(scene, cam);
-  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass]);
+  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass, renderLayersPrePass]);
 
   const startAnimation = useCallback(() => {
     if (animationFrameRef.current) {
@@ -921,6 +957,67 @@ export default function WebGLCanvas() {
     generatorDirtyRef.current = true;
     startAnimation();
   }, [applyGlassSettings, createMaterial, startAnimation]);
+
+  // Rebuild the 3D glass-slab scene from store settings (speed is read each frame).
+  const applyLayersSettings = useCallback(() => {
+    const scr = layersRef.current;
+    if (!scr) return;
+    const s = useDitherStore.getState();
+    scr.setParams({
+      layout: Math.round(s.layersLayout),
+      count: s.layersDensity,
+      spacing: s.layersSpacing,
+      thickness: s.layersThickness,
+      radius: s.layersRadius,
+      tilt: s.layersTilt,
+      roughness: s.layersLineWidth,
+      glow: s.layersGlow,
+      reflect: s.layersReflect,
+      opacity: s.layersOpacity,
+      fov: s.layersFov,
+      motion: s.layersMotion,
+      motionAmt: s.layersMotionAmt,
+      dir: s.layersDir,
+      tint: hexToRgb01(s.layersColorOuter),
+      glowA: hexToRgb01(s.layersColorInner),
+      glowB: hexToRgb01(s.layersEdge),
+      bg: hexToRgb01(s.layersBg),
+    });
+    generatorDirtyRef.current = true;
+  }, []);
+
+  // Initialize / resize the layers source (no uploaded file required)
+  const initLayers = useCallback(() => {
+    if (!sceneRef.current || !rendererRef.current) return;
+    const s = useDitherStore.getState();
+    const w = s.outputWidth, h = s.outputHeight;
+    rendererRef.current.setSize(w, h);
+    if (!generatorTargetRef.current) {
+      generatorTargetRef.current = new THREE.WebGLRenderTarget(w, h, {
+        minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+      });
+    } else {
+      generatorTargetRef.current.setSize(w, h);
+      generatorTargetRef.current.texture.minFilter = THREE.LinearFilter;
+      generatorTargetRef.current.texture.magFilter = THREE.LinearFilter;
+      generatorTargetRef.current.texture.needsUpdate = true;
+    }
+    if (!layersRef.current) {
+      const lf = createLayersField(rendererRef.current);
+      layersRef.current = lf;
+      sceneLayersRef.current = lf.scene;
+    }
+    applyLayersSettings();
+    const mainMaterial = createMaterial(generatorTargetRef.current.texture, w, h);
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    if (meshRef.current) { sceneRef.current.remove(meshRef.current); meshRef.current.geometry.dispose(); }
+    const quad = new THREE.Mesh(geometry, mainMaterial);
+    meshRef.current = quad; sceneRef.current.add(quad);
+    setResolution({ width: w, height: h });
+    setHasImage(true);
+    generatorDirtyRef.current = true;
+    startAnimation();
+  }, [applyLayersSettings, createMaterial, startAnimation]);
 
   // Load image file
   const loadImage = useCallback((file: File) => {
@@ -1177,7 +1274,7 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.is3D) {
       init3D();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass && !useDitherStore.getState().isLayers) {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
@@ -1188,7 +1285,7 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isWaveField) {
       initWave();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isGlass) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isGlass && !useDitherStore.getState().isLayers) {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
@@ -1199,12 +1296,23 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isGlass) {
       initGlass();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isLayers) {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ditherState.isGlass, ditherState.outputWidth, ditherState.outputHeight, initGlass]);
+
+  // Enable / resize / tear down the layers source
+  useEffect(() => {
+    if (ditherState.isLayers) {
+      initLayers();
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass) {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      setHasImage(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ditherState.isLayers, ditherState.outputWidth, ditherState.outputHeight, initLayers]);
 
   // Rebuild the 3D mesh / material when its appearance changes
   useEffect(() => {
@@ -1231,6 +1339,16 @@ export default function WebGLCanvas() {
       ditherState.glassFrost, ditherState.glassSheen, ditherState.glassDispersion, ditherState.glassWavy,
       ditherState.glassAngle, ditherState.glassMotion, ditherState.glassColorA, ditherState.glassColorB,
       ditherState.glassColorC, ditherState.glassBg]);
+
+  // Live-update layers-source appearance uniforms (speed read each frame in the pre-pass)
+  useEffect(() => {
+    if (ditherState.isLayers) applyLayersSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ditherState.layersLayout, ditherState.layersDensity, ditherState.layersRadius, ditherState.layersTilt,
+      ditherState.layersThickness, ditherState.layersSpacing, ditherState.layersLineWidth,
+      ditherState.layersGlow, ditherState.layersReflect, ditherState.layersOpacity, ditherState.layersFov,
+      ditherState.layersMotion, ditherState.layersMotionAmt, ditherState.layersDir,
+      ditherState.layersColorOuter, ditherState.layersColorInner, ditherState.layersEdge, ditherState.layersBg]);
 
   // Load / clear the uploaded background image that the glass refracts.
   useEffect(() => {
@@ -1504,7 +1622,9 @@ export default function WebGLCanvas() {
     const cam = cameraRef.current;
     if (!renderer || !scene || !cam) return;
     const s = useDitherStore.getState();
-    if (s.isGlass) {
+    if (s.isLayers) {
+      renderLayersPrePass(performance.now() * 0.001);
+    } else if (s.isGlass) {
       renderGlassPrePass(performance.now() * 0.001);
     } else if (s.isWaveField) {
       renderWavePrePass(performance.now() * 0.001);
@@ -1522,7 +1642,7 @@ export default function WebGLCanvas() {
     }
     if (materialRef.current) materialRef.current.uniforms.uTime.value = performance.now() * 0.001;
     renderer.render(scene, cam);
-  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass]);
+  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass, renderLayersPrePass]);
 
   useEffect(() => {
     generatorExport.renderExportFrame = renderExportFrame;

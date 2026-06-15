@@ -79,6 +79,28 @@ export interface DitherState {
   glassBgW: number;        // image natural width  (for cover-fit aspect)
   glassBgH: number;        // image natural height
 
+  // Layers source — nested neon frames / stacked planes (SDF)
+  isLayers: boolean;
+  layersLayout: number;    // 0 stack (Y) · 1 tunnel (Z) · 2 wall (X)
+  layersDensity: number;   // slab count
+  layersRadius: number;    // glass corner radius
+  layersTilt: number;      // group pitch (radians)
+  layersThickness: number; // slab thickness
+  layersSpacing: number;   // gap between slabs
+  layersLineWidth: number; // glass frost (roughness 0..1)
+  layersGlow: number;      // neon glow intensity
+  layersReflect: number;   // env reflection 0..1
+  layersOpacity: number;   // glass opacity 0..1
+  layersFov: number;       // camera FOV (zoom)
+  layersMotion: number;    // 0 sway·1 spin·2 tumble·3 float·4 wave·5 breathe·6 orbit·7 figure-8·8 pendulum
+  layersMotionAmt: number; // motion amplitude 0..1
+  layersDir: number;       // +1 / -1 motion direction
+  layersSpeed: number;     // animation speed (loop = 2π/speed)
+  layersColorOuter: string; // glass tint
+  layersColorInner: string; // neon core
+  layersEdge: string;       // neon outer
+  layersBg: string;
+
   // Saved colour swatches (persisted, reusable across all colour pickers)
   savedColors: string[];
 
@@ -302,6 +324,7 @@ export interface DitherState {
   setWaveFieldEnabled: (enabled: boolean) => void;
   setWaveType: (type: number) => void;
   setGlassEnabled: (enabled: boolean) => void;
+  setLayersEnabled: (enabled: boolean) => void;
   addSavedColor: (hex: string) => void;
   removeSavedColor: (hex: string) => void;
   setGenerativeSetting: (key: string, value: number | boolean | string) => void;
@@ -371,6 +394,27 @@ const defaultState = {
   glassBgImage: null,
   glassBgW: 0,
   glassBgH: 0,
+
+  isLayers: false,
+  layersLayout: 0,
+  layersDensity: 5,
+  layersRadius: 0.06,
+  layersTilt: 0.18,
+  layersThickness: 0.12,
+  layersSpacing: 0.62,
+  layersLineWidth: 0.25,
+  layersGlow: 1.1,
+  layersReflect: 0.65,
+  layersOpacity: 0.34,
+  layersFov: 46,
+  layersMotion: 6,
+  layersMotionAmt: 0.5,
+  layersDir: 1,
+  layersSpeed: 0.4,
+  layersColorOuter: '#2a2f6e',
+  layersColorInner: '#c77dff',
+  layersEdge: '#6d8bff',
+  layersBg: '#05050c',
 
   savedColors: loadSavedColors(),
 
@@ -559,7 +603,7 @@ export const useDitherStore = create<DitherState>((set) => ({
 
   setFile: (file, isVideo) => set({ ...defaultState, currentFile: file, isVideo }),
 
-  setWebcam: (enabled) => set(enabled ? { isWebcam: true, isGenerative: false, is3D: false, isWaveField: false, isGlass: false } : { isWebcam: false }),
+  setWebcam: (enabled) => set(enabled ? { isWebcam: true, isGenerative: false, is3D: false, isWaveField: false, isGlass: false, isLayers: false } : { isWebcam: false }),
 
   setVideoDuration: (duration) => set({ videoDuration: duration }),
 
@@ -641,6 +685,26 @@ export const useDitherStore = create<DitherState>((set) => ({
     glassBgImage: state.glassBgImage,
     glassBgW: state.glassBgW,
     glassBgH: state.glassBgH,
+    isLayers: state.isLayers,
+    layersLayout: state.layersLayout,
+    layersDensity: state.layersDensity,
+    layersRadius: state.layersRadius,
+    layersTilt: state.layersTilt,
+    layersThickness: state.layersThickness,
+    layersSpacing: state.layersSpacing,
+    layersLineWidth: state.layersLineWidth,
+    layersGlow: state.layersGlow,
+    layersReflect: state.layersReflect,
+    layersOpacity: state.layersOpacity,
+    layersFov: state.layersFov,
+    layersMotion: state.layersMotion,
+    layersMotionAmt: state.layersMotionAmt,
+    layersDir: state.layersDir,
+    layersSpeed: state.layersSpeed,
+    layersColorOuter: state.layersColorOuter,
+    layersColorInner: state.layersColorInner,
+    layersEdge: state.layersEdge,
+    layersBg: state.layersBg,
     savedColors: state.savedColors,
     outputWidth: state.outputWidth,
     outputHeight: state.outputHeight,
@@ -711,23 +775,28 @@ export const useDitherStore = create<DitherState>((set) => ({
       // Tasteful baseline so a bare GENERATE looks good: full colour (not the
       // app's B&W duotone) with enough levels to keep the gradient smooth.
       // Presets can still override colour mode / levels.
-      ? { isGenerative: true, is3D: false, isWaveField: false, isGlass: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { isGenerative: true, is3D: false, isWaveField: false, isGlass: false, isLayers: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
       : { isGenerative: false }),
 
   setThreeDEnabled: (enabled) =>
     set(enabled
-      ? { is3D: true, isGenerative: false, isWaveField: false, isGlass: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { is3D: true, isGenerative: false, isWaveField: false, isGlass: false, isLayers: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
       : { is3D: false }),
 
   setWaveFieldEnabled: (enabled) =>
     set(enabled
-      ? { isWaveField: true, is3D: false, isGenerative: false, isGlass: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { isWaveField: true, is3D: false, isGenerative: false, isGlass: false, isLayers: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
       : { isWaveField: false }),
 
   setGlassEnabled: (enabled) =>
     set(enabled
-      ? { isGlass: true, isWaveField: false, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { isGlass: true, isLayers: false, isWaveField: false, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
       : { isGlass: false }),
+
+  setLayersEnabled: (enabled) =>
+    set(enabled
+      ? { isLayers: true, isGlass: false, isWaveField: false, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      : { isLayers: false }),
 
   addSavedColor: (hex) => set((state) => {
     const c = hex.toLowerCase();
