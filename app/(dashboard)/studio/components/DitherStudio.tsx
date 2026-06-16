@@ -35,6 +35,7 @@ const IconCheck = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" str
 const IconHelp = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 0 1 4.5 1.5c0 1.5-2 2-2 3.5" /><path d="M12 17.5h.01" /></svg>);
 const IconExpand = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3" /></svg>);
 const IconShrink = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3m13-5h-3a2 2 0 0 0-2 2v3" /></svg>);
+const IconCompare = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" /></svg>);
 const IconExport = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" /></svg>);
 
 function PanelHeader({ title, subtitle }: { title: string; subtitle?: string }) {
@@ -328,6 +329,7 @@ export default function DitherStudio() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const presetInputRef = useRef<HTMLInputElement>(null);
+  const projectInputRef = useRef<HTMLInputElement>(null);
 
   // Video/GIF Export State
   const [isExporting, setIsExporting] = useState(false);
@@ -408,6 +410,41 @@ export default function DitherStudio() {
       bloom: state.bloom,
       customPalette: state.customPalette,
     };
+  };
+
+  // Portable project file: serialise the whole store (minus file/transient fields)
+  // to JSON so the full studio state can be saved and reloaded anywhere (web too).
+  const saveProject = () => {
+    const s = useDitherStore.getState() as unknown as Record<string, unknown>;
+    const SKIP = new Set(['currentFile', 'isWebcam', 'isVideo', 'fps', 'compareOriginal', 'savedColors']);
+    const data: Record<string, unknown> = {};
+    for (const k in s) {
+      if (typeof s[k] === 'function' || SKIP.has(k)) continue;
+      data[k] = s[k];
+    }
+    const blob = new Blob([JSON.stringify({ app: 'ditherstudio', version: 1, settings: data }, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, `dither-project-${Date.now()}.json`);
+  };
+
+  const loadProjectFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        const settings = (parsed && parsed.settings) || parsed;
+        if (!settings || typeof settings !== 'object') return;
+        const cur = useDitherStore.getState() as unknown as Record<string, unknown>;
+        const next: Record<string, unknown> = {};
+        for (const k in settings) {
+          if (k in cur && typeof cur[k] !== 'function' && k !== 'currentFile') next[k] = settings[k];
+        }
+        useDitherStore.setState(next);
+        setSelectedPresetId('');
+      } catch (err) {
+        console.error('Invalid project file', err);
+      }
+    };
+    reader.readAsText(file);
   };
 
   const applyPreset = (preset: DitherPreset) => {
@@ -570,6 +607,7 @@ export default function DitherStudio() {
         case 'r': case 'R': st.resetAll(); setSelectedPresetId(''); break;
         case 'e': case 'E': exportImage('png'); break;
         case 'c': case 'C': copyToClipboard(); break;
+        case 'b': case 'B': st.setGlobalSetting('compareOriginal', true); break;
         case 'f': case 'F': setFocusMode((v) => !v); break;
         case '?': setShowShortcuts((v) => !v); break;
         case 'Escape': setShowShortcuts(false); setFocusMode(false); break;
@@ -583,8 +621,12 @@ export default function DitherStudio() {
         default: return;
       }
     };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'b' || e.key === 'B') useDitherStore.getState().setGlobalSetting('compareOriginal', false);
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKeyUp);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKeyUp); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1040,6 +1082,14 @@ export default function DitherStudio() {
             <IconRedo />
           </button>
           <div className="w-px h-5 bg-white/10 mx-0.5" />
+          <button
+            onPointerDown={() => useDitherStore.getState().setGlobalSetting('compareOriginal', true)}
+            onPointerUp={() => useDitherStore.getState().setGlobalSetting('compareOriginal', false)}
+            onPointerLeave={() => useDitherStore.getState().setGlobalSetting('compareOriginal', false)}
+            title="Hold to compare original (B)"
+            className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${ditherState.compareOriginal ? 'text-white bg-white/10 border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10 border-transparent hover:border-white/10'}`}>
+            <IconCompare />
+          </button>
           <button onClick={copyToClipboard} title="Copy to clipboard (C)" className={`w-8 h-8 flex items-center justify-center rounded-lg border border-transparent transition-colors ${justCopied ? 'text-emerald-400' : 'text-white/70 hover:text-white hover:bg-white/10 hover:border-white/10'}`}>
             {justCopied ? <IconCheck /> : <IconCopy />}
           </button>
@@ -1074,8 +1124,9 @@ export default function DitherStudio() {
                 ['Reset all', 'R'],
                 ['Export PNG', 'E'],
                 ['Copy to clipboard', 'C'],
+                ['Compare original (hold)', 'B'],
                 ['Focus mode', 'F'],
-                ['Switch source', '1 – 6'],
+                ['Switch source', '1 – 7'],
                 ['This help', '?'],
               ] as [string, string][]).map(([label, key]) => (
                 <div key={label} className="flex items-center justify-between">
@@ -1207,6 +1258,23 @@ export default function DitherStudio() {
               DELETE PRESET
             </button>
           )}
+        </div>
+
+        <div className="mb-8">
+          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/40 mb-3">/PROJECT</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={saveProject}
+              className="p-2 bg-white/[0.045] text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-colors hover:border-white/40 hover:bg-white/[0.08]">
+              Save Project
+            </button>
+            <button onClick={() => projectInputRef.current?.click()}
+              className="p-2 bg-white/[0.045] text-white/90 border border-white/10 rounded-xl cursor-pointer font-sans text-xs transition-colors hover:border-white/40 hover:bg-white/[0.08]">
+              Open Project
+            </button>
+          </div>
+          <input ref={projectInputRef} type="file" accept=".json,application/json" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) loadProjectFile(f); e.currentTarget.value = ''; }} />
+          <p className="text-[10px] text-white/40 mt-2">Saves all settings to a portable .json file.</p>
         </div>
 
         <div className="mb-8">

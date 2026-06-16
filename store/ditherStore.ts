@@ -117,6 +117,9 @@ export interface DitherState {
   textColor: string;
   textBg: string;
 
+  // Before/after compare (transient — shows the raw source, no dithering)
+  compareOriginal: boolean;
+
   // Saved colour swatches (persisted, reusable across all colour pickers)
   savedColors: string[];
 
@@ -447,6 +450,8 @@ const defaultState = {
   textUppercase: true,
   textColor: '#ffffff',
   textBg: '#000000',
+
+  compareOriginal: false,
 
   savedColors: loadSavedColors(),
 

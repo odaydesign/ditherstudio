@@ -309,6 +309,7 @@ export default function WebGLCanvas() {
       uniforms: {
         tDiffuse: { value: texture },
         tPrevious: { value: renderTargetRef.current?.texture || null },
+        uShowOriginal: { value: 0 },
         uAlgorithm: { value: state.currentAlgorithm },
         uAlgorithm2: { value: state.secondAlgorithm },
         uAlgo2Enabled: { value: state.multiAlgoEnabled },
@@ -661,6 +662,7 @@ export default function WebGLCanvas() {
     // Generative pre-pass: render the abstract pattern into the target, which the
     // main material samples as tDiffuse. Skipped when paused and nothing changed.
     const genState = useDitherStore.getState();
+    materialRef.current.uniforms.uShowOriginal.value = genState.compareOriginal ? 1 : 0;
     if (genState.isText) {
       renderTextPrePass();
     } else if (genState.isLayers) {
@@ -732,7 +734,7 @@ export default function WebGLCanvas() {
         renderer.setRenderTarget(null);
       }
     }
-    if (materialRef.current) materialRef.current.uniforms.uTime.value = uTimeSeconds;
+    if (materialRef.current) { materialRef.current.uniforms.uTime.value = uTimeSeconds; materialRef.current.uniforms.uShowOriginal.value = 0; }
     renderer.render(scene, cam);
   }, [render3DPrePass, renderWavePrePass, renderGlassPrePass, renderLayersPrePass, renderTextPrePass]);
 
@@ -1770,7 +1772,7 @@ export default function WebGLCanvas() {
         renderer.setRenderTarget(null);
       }
     }
-    if (materialRef.current) materialRef.current.uniforms.uTime.value = performance.now() * 0.001;
+    if (materialRef.current) { materialRef.current.uniforms.uTime.value = performance.now() * 0.001; materialRef.current.uniforms.uShowOriginal.value = 0; }
     renderer.render(scene, cam);
   }, [render3DPrePass, renderWavePrePass, renderGlassPrePass, renderLayersPrePass, renderTextPrePass]);
 

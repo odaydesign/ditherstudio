@@ -9,6 +9,7 @@ export const fragmentShader = `
                     uniform sampler2D tAsciiChars;
                     uniform sampler2D tDiffuse;
                     uniform sampler2D tPrevious;
+                    uniform float uShowOriginal; // 1 → bypass dithering, show raw source (before/after compare)
                     uniform int uAlgorithm;
                     uniform int uAlgorithm2;
                     uniform bool uAlgo2Enabled;
@@ -1586,6 +1587,11 @@ float sdOrientedBox( vec2 p, vec2 a, vec2 b, float th )
                     }
 
                     void main() {
+                        // Before/after compare: show the raw source, no dithering.
+                        if (uShowOriginal > 0.5) {
+                            gl_FragColor = vec4(texture2D(tDiffuse, vUv).rgb, 1.0);
+                            return;
+                        }
                         // Algorithm 2: ASCII / Shape Renderer (Bypasses standard pipeline)
                         if (uAlgorithm == 2) {
                             vec3 asciiResult = renderAsciiShapes(analogUV(applyFx(vUv)));
