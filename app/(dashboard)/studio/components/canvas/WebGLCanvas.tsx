@@ -175,6 +175,12 @@ export default function WebGLCanvas() {
   const glassBgTextureRef = useRef<THREE.Texture | null>(null);
   const sceneLayersRef = useRef<THREE.Scene | null>(null);
   const layersRef = useRef<LayersField | null>(null);
+  // Text source — a 2D canvas of type rendered through the dither pipeline
+  const sceneTextRef = useRef<THREE.Scene | null>(null);
+  const textMeshRef = useRef<THREE.Mesh | null>(null);
+  const textCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const textTextureRef = useRef<THREE.CanvasTexture | null>(null);
+  const textMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
   // Text / logo overlay (composited into the same canvas so it exports)
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayTextureRef = useRef<THREE.CanvasTexture | null>(null);
@@ -238,6 +244,9 @@ export default function WebGLCanvas() {
       glassRef.current?.dispose();
       glassBgTextureRef.current?.dispose();
       layersRef.current?.dispose();
+      textTextureRef.current?.dispose();
+      textMaterialRef.current?.dispose();
+      textMeshRef.current?.geometry.dispose();
     };
   }, []);
 
@@ -612,6 +621,23 @@ export default function WebGLCanvas() {
     tgt.texture.colorSpace = prevCS;
   }, []);
 
+  // Render the text source (a 2D canvas of type) into the source target (tDiffuse).
+  const renderTextPrePass = useCallback(() => {
+    const renderer = rendererRef.current;
+    const tgt = generatorTargetRef.current;
+    const scn = sceneTextRef.current;
+    const cam = cameraRef.current;
+    if (!renderer || !tgt || !scn || !cam) return;
+    const rw = renderer.domElement.width, rh = renderer.domElement.height;
+    if (tgt.width !== rw || tgt.height !== rh) {
+      tgt.setSize(rw, rh);
+      tgt.texture.minFilter = THREE.LinearFilter; tgt.texture.magFilter = THREE.LinearFilter; tgt.texture.needsUpdate = true;
+    }
+    renderer.setRenderTarget(tgt);
+    renderer.render(scn, cam);
+    renderer.setRenderTarget(null);
+  }, []);
+
   const animate = useCallback(() => {
     if (!sceneRef.current || !cameraRef.current || !rendererRef.current || !materialRef.current) {
       return;
@@ -635,7 +661,9 @@ export default function WebGLCanvas() {
     // Generative pre-pass: render the abstract pattern into the target, which the
     // main material samples as tDiffuse. Skipped when paused and nothing changed.
     const genState = useDitherStore.getState();
-    if (genState.isLayers) {
+    if (genState.isText) {
+      renderTextPrePass();
+    } else if (genState.isLayers) {
       renderLayersPrePass(performance.now() * 0.001);
     } else if (genState.isGlass) {
       renderGlassPrePass(performance.now() * 0.001);
@@ -672,7 +700,7 @@ export default function WebGLCanvas() {
     }
 
     animationFrameRef.current = requestAnimationFrame(animate);
-  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass, renderLayersPrePass]);
+  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass, renderLayersPrePass, renderTextPrePass]);
 
   // Render ONE deterministic frame with time forced to `uTimeSeconds`. Used by the
   // exporter to produce seamless loops (frame i at phase 2π·i/N) at any FPS.
@@ -683,7 +711,9 @@ export default function WebGLCanvas() {
     if (!renderer || !scene || !cam) return;
 
     const s = useDitherStore.getState();
-    if (s.isLayers) {
+    if (s.isText) {
+      renderTextPrePass();
+    } else if (s.isLayers) {
       renderLayersPrePass(uTimeSeconds);
     } else if (s.isGlass) {
       renderGlassPrePass(uTimeSeconds);
@@ -704,7 +734,7 @@ export default function WebGLCanvas() {
     }
     if (materialRef.current) materialRef.current.uniforms.uTime.value = uTimeSeconds;
     renderer.render(scene, cam);
-  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass, renderLayersPrePass]);
+  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass, renderLayersPrePass, renderTextPrePass]);
 
   const startAnimation = useCallback(() => {
     if (animationFrameRef.current) {
@@ -1021,6 +1051,83 @@ export default function WebGLCanvas() {
     startAnimation();
   }, [applyLayersSettings, createMaterial, startAnimation]);
 
+  // ---- Text source: draw type to a 2D canvas, feed it through the dither pipeline ----
+  const TEXT_FONTS = ['Helvetica, Arial, sans-serif', 'Georgia, "Times New Roman", serif', 'ui-monospace, Menlo, monospace', 'Impact, "Arial Black", sans-serif'];
+
+  const applyTextSettings = useCallback(() => {
+    const cv = textCanvasRef.current, tex = textTextureRef.current;
+    if (!cv || !tex) return;
+    const s = useDitherStore.getState();
+    const w = s.outputWidth, h = s.outputHeight;
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = s.textBg;
+    ctx.fillRect(0, 0, w, h);
+    const family = TEXT_FONTS[Math.round(s.textFont)] || TEXT_FONTS[0];
+    const px = Math.max(4, s.textSize * h);
+    ctx.fillStyle = s.textColor;
+    ctx.font = `${s.textItalic ? 'italic ' : ''}${Math.round(s.textWeight)} ${px}px ${family}`;
+    ctx.textBaseline = 'middle';
+    (ctx as unknown as { letterSpacing: string }).letterSpacing = `${(s.textTracking * h) / 1000}px`;
+    const padX = w * 0.06;
+    let x = w / 2;
+    if (s.textAlign === 0) { ctx.textAlign = 'left'; x = padX; }
+    else if (s.textAlign === 2) { ctx.textAlign = 'right'; x = w - padX; }
+    else { ctx.textAlign = 'center'; x = w / 2; }
+    const raw = s.textContent || '';
+    const lines = (s.textUppercase ? raw.toUpperCase() : raw).split('\n');
+    const lh = px * s.textLineHeight;
+    const startY = h / 2 - ((lines.length - 1) * lh) / 2;
+    for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], x, startY + i * lh);
+    tex.needsUpdate = true;
+    generatorDirtyRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const initText = useCallback(() => {
+    if (!sceneRef.current || !rendererRef.current) return;
+    const s = useDitherStore.getState();
+    const w = s.outputWidth, h = s.outputHeight;
+    rendererRef.current.setSize(w, h);
+    if (!generatorTargetRef.current) {
+      generatorTargetRef.current = new THREE.WebGLRenderTarget(w, h, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+    } else {
+      generatorTargetRef.current.setSize(w, h);
+      generatorTargetRef.current.texture.minFilter = THREE.LinearFilter;
+      generatorTargetRef.current.texture.magFilter = THREE.LinearFilter;
+      generatorTargetRef.current.texture.needsUpdate = true;
+    }
+    if (!textCanvasRef.current) textCanvasRef.current = document.createElement('canvas');
+    if (!textTextureRef.current) {
+      const tex = new THREE.CanvasTexture(textCanvasRef.current);
+      tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
+      textTextureRef.current = tex;
+    }
+    if (!sceneTextRef.current) {
+      sceneTextRef.current = new THREE.Scene();
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { tText: { value: textTextureRef.current } },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+        fragmentShader: 'precision highp float; varying vec2 vUv; uniform sampler2D tText; void main(){ gl_FragColor = texture2D(tText, vUv); }',
+      });
+      textMaterialRef.current = mat;
+      const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
+      quad.frustumCulled = false;
+      textMeshRef.current = quad;
+      sceneTextRef.current.add(quad);
+    }
+    applyTextSettings();
+    const mainMaterial = createMaterial(generatorTargetRef.current.texture, w, h);
+    if (meshRef.current) { sceneRef.current.remove(meshRef.current); meshRef.current.geometry.dispose(); }
+    const mquad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mainMaterial);
+    meshRef.current = mquad; sceneRef.current.add(mquad);
+    setResolution({ width: w, height: h });
+    setHasImage(true);
+    generatorDirtyRef.current = true;
+    startAnimation();
+  }, [applyTextSettings, createMaterial, startAnimation]);
+
   // Load image file
   const loadImage = useCallback((file: File) => {
     const reader = new FileReader();
@@ -1264,7 +1371,7 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isGenerative) {
       initGenerative();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass && !useDitherStore.getState().isLayers && !useDitherStore.getState().isText) {
       // Left generative mode with no other source loaded → stop the loop, show the prompt
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
@@ -1276,7 +1383,7 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.is3D) {
       init3D();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass && !useDitherStore.getState().isLayers) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass && !useDitherStore.getState().isLayers && !useDitherStore.getState().isText) {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
@@ -1287,7 +1394,7 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isWaveField) {
       initWave();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isGlass && !useDitherStore.getState().isLayers) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isGlass && !useDitherStore.getState().isLayers && !useDitherStore.getState().isText) {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
@@ -1298,7 +1405,7 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isGlass) {
       initGlass();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isLayers) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isLayers && !useDitherStore.getState().isText) {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
@@ -1309,12 +1416,31 @@ export default function WebGLCanvas() {
   useEffect(() => {
     if (ditherState.isLayers) {
       initLayers();
-    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass) {
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass && !useDitherStore.getState().isText) {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       setHasImage(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ditherState.isLayers, ditherState.outputWidth, ditherState.outputHeight, initLayers]);
+
+  // Enable / resize / tear down the text source
+  useEffect(() => {
+    if (ditherState.isText) {
+      initText();
+    } else if (!useDitherStore.getState().currentFile && !useDitherStore.getState().isGenerative && !useDitherStore.getState().is3D && !useDitherStore.getState().isWaveField && !useDitherStore.getState().isGlass && !useDitherStore.getState().isLayers) {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      setHasImage(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ditherState.isText, ditherState.outputWidth, ditherState.outputHeight, initText]);
+
+  // Live-update the text source when its content/style changes
+  useEffect(() => {
+    if (ditherState.isText) applyTextSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ditherState.textContent, ditherState.textFont, ditherState.textSize, ditherState.textWeight,
+      ditherState.textAlign, ditherState.textLineHeight, ditherState.textTracking, ditherState.textItalic,
+      ditherState.textUppercase, ditherState.textColor, ditherState.textBg]);
 
   // Rebuild the 3D mesh / material when its appearance changes
   useEffect(() => {
@@ -1624,7 +1750,9 @@ export default function WebGLCanvas() {
     const cam = cameraRef.current;
     if (!renderer || !scene || !cam) return;
     const s = useDitherStore.getState();
-    if (s.isLayers) {
+    if (s.isText) {
+      renderTextPrePass();
+    } else if (s.isLayers) {
       renderLayersPrePass(performance.now() * 0.001);
     } else if (s.isGlass) {
       renderGlassPrePass(performance.now() * 0.001);
@@ -1644,7 +1772,7 @@ export default function WebGLCanvas() {
     }
     if (materialRef.current) materialRef.current.uniforms.uTime.value = performance.now() * 0.001;
     renderer.render(scene, cam);
-  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass, renderLayersPrePass]);
+  }, [render3DPrePass, renderWavePrePass, renderGlassPrePass, renderLayersPrePass, renderTextPrePass]);
 
   useEffect(() => {
     generatorExport.renderExportFrame = renderExportFrame;

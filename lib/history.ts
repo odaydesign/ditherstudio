@@ -14,7 +14,7 @@ import { useDitherStore } from '@/store/ditherStore';
 // Fields kept out of history: source identity, persisted, and large/binary blobs.
 const EXCLUDE = new Set<string>([
   'currentFile', 'isWebcam', 'isVideo',
-  'isGenerative', 'is3D', 'isWaveField', 'isGlass', 'isLayers',
+  'isGenerative', 'is3D', 'isWaveField', 'isGlass', 'isLayers', 'isText',
   'savedColors',
   'glassBgImage', 'glassBgW', 'glassBgH',
   'generativeImageSrc', 'generativeImageW', 'generativeImageH',

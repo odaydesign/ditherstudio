@@ -103,6 +103,20 @@ export interface DitherState {
   layersEdge: string;       // neon outer
   layersBg: string;
 
+  // Text / typography source
+  isText: boolean;
+  textContent: string;
+  textFont: number;        // 0 sans · 1 serif · 2 mono · 3 display
+  textSize: number;        // fraction of canvas height
+  textWeight: number;      // 100..900
+  textAlign: number;       // 0 left · 1 center · 2 right
+  textLineHeight: number;
+  textTracking: number;    // letter spacing (px @ 1000px tall)
+  textItalic: boolean;
+  textUppercase: boolean;
+  textColor: string;
+  textBg: string;
+
   // Saved colour swatches (persisted, reusable across all colour pickers)
   savedColors: string[];
 
@@ -327,6 +341,7 @@ export interface DitherState {
   setWaveType: (type: number) => void;
   setGlassEnabled: (enabled: boolean) => void;
   setLayersEnabled: (enabled: boolean) => void;
+  setTextEnabled: (enabled: boolean) => void;
   addSavedColor: (hex: string) => void;
   removeSavedColor: (hex: string) => void;
   setGenerativeSetting: (key: string, value: number | boolean | string) => void;
@@ -419,6 +434,19 @@ const defaultState = {
   layersColorInner: '#c77dff',
   layersEdge: '#6d8bff',
   layersBg: '#05050c',
+
+  isText: false,
+  textContent: 'DITHER',
+  textFont: 3,
+  textSize: 0.34,
+  textWeight: 800,
+  textAlign: 1,
+  textLineHeight: 1.0,
+  textTracking: 0,
+  textItalic: false,
+  textUppercase: true,
+  textColor: '#ffffff',
+  textBg: '#000000',
 
   savedColors: loadSavedColors(),
 
@@ -607,7 +635,7 @@ export const useDitherStore = create<DitherState>((set) => ({
 
   setFile: (file, isVideo) => set({ ...defaultState, currentFile: file, isVideo }),
 
-  setWebcam: (enabled) => set(enabled ? { isWebcam: true, isGenerative: false, is3D: false, isWaveField: false, isGlass: false, isLayers: false } : { isWebcam: false }),
+  setWebcam: (enabled) => set(enabled ? { isWebcam: true, isGenerative: false, is3D: false, isWaveField: false, isGlass: false, isLayers: false, isText: false } : { isWebcam: false }),
 
   setVideoDuration: (duration) => set({ videoDuration: duration }),
 
@@ -711,6 +739,18 @@ export const useDitherStore = create<DitherState>((set) => ({
     layersColorInner: state.layersColorInner,
     layersEdge: state.layersEdge,
     layersBg: state.layersBg,
+    isText: state.isText,
+    textContent: state.textContent,
+    textFont: state.textFont,
+    textSize: state.textSize,
+    textWeight: state.textWeight,
+    textAlign: state.textAlign,
+    textLineHeight: state.textLineHeight,
+    textTracking: state.textTracking,
+    textItalic: state.textItalic,
+    textUppercase: state.textUppercase,
+    textColor: state.textColor,
+    textBg: state.textBg,
     savedColors: state.savedColors,
     outputWidth: state.outputWidth,
     outputHeight: state.outputHeight,
@@ -781,28 +821,33 @@ export const useDitherStore = create<DitherState>((set) => ({
       // Tasteful baseline so a bare GENERATE looks good: full colour (not the
       // app's B&W duotone) with enough levels to keep the gradient smooth.
       // Presets can still override colour mode / levels.
-      ? { isGenerative: true, is3D: false, isWaveField: false, isGlass: false, isLayers: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { isGenerative: true, is3D: false, isWaveField: false, isGlass: false, isLayers: false, currentFile: null, isVideo: false, isWebcam: false, isText: false, colorMode: 0, colors: 6 }
       : { isGenerative: false }),
 
   setThreeDEnabled: (enabled) =>
     set(enabled
-      ? { is3D: true, isGenerative: false, isWaveField: false, isGlass: false, isLayers: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { is3D: true, isGenerative: false, isWaveField: false, isGlass: false, isLayers: false, currentFile: null, isVideo: false, isWebcam: false, isText: false, colorMode: 0, colors: 6 }
       : { is3D: false }),
 
   setWaveFieldEnabled: (enabled) =>
     set(enabled
-      ? { isWaveField: true, is3D: false, isGenerative: false, isGlass: false, isLayers: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { isWaveField: true, is3D: false, isGenerative: false, isGlass: false, isLayers: false, currentFile: null, isVideo: false, isWebcam: false, isText: false, colorMode: 0, colors: 6 }
       : { isWaveField: false }),
 
   setGlassEnabled: (enabled) =>
     set(enabled
-      ? { isGlass: true, isLayers: false, isWaveField: false, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { isGlass: true, isLayers: false, isWaveField: false, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, isText: false, colorMode: 0, colors: 6 }
       : { isGlass: false }),
 
   setLayersEnabled: (enabled) =>
     set(enabled
-      ? { isLayers: true, isGlass: false, isWaveField: false, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 6 }
+      ? { isLayers: true, isGlass: false, isWaveField: false, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, isText: false, colorMode: 0, colors: 6 }
       : { isLayers: false }),
+
+  setTextEnabled: (enabled) =>
+    set(enabled
+      ? { isText: true, isLayers: false, isGlass: false, isWaveField: false, is3D: false, isGenerative: false, currentFile: null, isVideo: false, isWebcam: false, colorMode: 0, colors: 2 }
+      : { isText: false }),
 
   addSavedColor: (hex) => set((state) => {
     const c = hex.toLowerCase();

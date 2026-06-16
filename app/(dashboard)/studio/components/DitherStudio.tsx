@@ -10,6 +10,7 @@ import Object3DPanel from './controls/Object3DPanel';
 import WaveFieldPanel from './controls/WaveFieldPanel';
 import GlassPanel from './controls/GlassPanel';
 import LayersPanel from './controls/LayersPanel';
+import TextPanel from './controls/TextPanel';
 import { useDitherStore } from '@/store/ditherStore';
 import { initHistory, undo, redo, useHistoryMeta } from '@/lib/history';
 import { generatorExport } from '@/lib/three/generatorController';
@@ -24,6 +25,7 @@ const IconCube = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stro
 const IconWave = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12c2.5-4 5-4 7.5 0s5 4 7.5 0 5-4 5 0" /></svg>);
 const IconGlass = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M8 3.5v17M12.5 3.5v17M16.5 3.5v17" /></svg>);
 const IconLayers = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="3" /><rect x="7.5" y="7.5" width="9" height="9" rx="2" /></svg>);
+const IconText = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16M4 5v2m16-2v2M12 5v14m-3 0h6" /></svg>);
 const IconShuffle = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" /></svg>);
 const IconReset = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5" /></svg>);
 const IconUndo = () => (<svg className={ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-4" /></svg>);
@@ -528,7 +530,7 @@ export default function DitherStudio() {
     }, mimeType, quality);
 
     // Generative / 3D / wave stills render at >= 4K via a temporary hi-res pass.
-    if ((s.isGenerative || s.is3D || s.isWaveField || s.isGlass || s.isLayers) && generatorExport.beginExport && generatorExport.renderStillFrame) {
+    if ((s.isGenerative || s.is3D || s.isWaveField || s.isGlass || s.isLayers || s.isText) && generatorExport.beginExport && generatorExport.renderStillFrame) {
       const { w, h } = exportDims();
       generatorExport.beginExport(w, h);
       generatorExport.renderStillFrame();
@@ -571,12 +573,13 @@ export default function DitherStudio() {
         case 'f': case 'F': setFocusMode((v) => !v); break;
         case '?': setShowShortcuts((v) => !v); break;
         case 'Escape': setShowShortcuts(false); setFocusMode(false); break;
-        case '1': st.setGenerativeEnabled(false); st.setThreeDEnabled(false); st.setWaveFieldEnabled(false); st.setGlassEnabled(false); st.setLayersEnabled(false); break;
+        case '1': st.setGenerativeEnabled(false); st.setThreeDEnabled(false); st.setWaveFieldEnabled(false); st.setGlassEnabled(false); st.setLayersEnabled(false); st.setTextEnabled(false); break;
         case '2': st.setGenerativeEnabled(true); break;
         case '3': st.setThreeDEnabled(true); break;
         case '4': st.setWaveFieldEnabled(true); break;
         case '5': st.setGlassEnabled(true); break;
         case '6': st.setLayersEnabled(true); break;
+        case '7': st.setTextEnabled(true); break;
         default: return;
       }
     };
@@ -1016,6 +1019,8 @@ export default function DitherStudio() {
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${ditherState.isGlass ? 'bg-white text-[#0b0b0d]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}><IconGlass />Glass</button>
           <button onClick={() => useDitherStore.getState().setLayersEnabled(true)}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${ditherState.isLayers ? 'bg-white text-[#0b0b0d]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}><IconLayers />Layers</button>
+          <button onClick={() => useDitherStore.getState().setTextEnabled(true)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${ditherState.isText ? 'bg-white text-[#0b0b0d]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}><IconText />Text</button>
         </div>
 
         <div className="flex-1" />
@@ -1087,11 +1092,11 @@ export default function DitherStudio() {
       <div className="flex-1 flex min-h-0">
         {/* LEFT — Source */}
         <aside className={`w-[300px] shrink-0 flex-col border-r border-white/10 bg-white/[0.025] backdrop-blur-2xl ${focusMode ? 'hidden' : 'flex'}`}>
-          <PanelHeader title="Source" subtitle={ditherState.isLayers ? 'layers' : ditherState.isGlass ? 'glass' : ditherState.isWaveField ? 'wave field' : ditherState.is3D ? '3d object' : ditherState.isGenerative ? 'generative' : 'upload'} />
+          <PanelHeader title="Source" subtitle={ditherState.isText ? 'text' : ditherState.isLayers ? 'layers' : ditherState.isGlass ? 'glass' : ditherState.isWaveField ? 'wave field' : ditherState.is3D ? '3d object' : ditherState.isGenerative ? 'generative' : 'upload'} />
           <div className="flex-1 overflow-y-auto p-4">
             {/* Source creative controls */}
             <div className="mb-8">
-              {ditherState.isLayers ? <LayersPanel /> : ditherState.isGlass ? <GlassPanel /> : ditherState.isWaveField ? <WaveFieldPanel /> : ditherState.is3D ? <Object3DPanel /> : ditherState.isGenerative ? <GenerativePanel /> : (
+              {ditherState.isText ? <TextPanel /> : ditherState.isLayers ? <LayersPanel /> : ditherState.isGlass ? <GlassPanel /> : ditherState.isWaveField ? <WaveFieldPanel /> : ditherState.is3D ? <Object3DPanel /> : ditherState.isGenerative ? <GenerativePanel /> : (
                 <>
                   <UploadZone onBatchSelect={(files) => setBatchFiles(files)} />
                   {batchFiles.length > 0 && (
