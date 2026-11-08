@@ -651,6 +651,45 @@ export const generatorShader = `
             float h = hash21(cell + uSeed);
             float d = (h > 0.5) ? abs(f.x - f.y) : abs(f.x + f.y);
             val = aaBand(d * 0.7071068, 0.06);
+        } else if (uPattern == 40) {    // aurora — drifting vertical light curtains
+            vec2 orb = vec2(sin(t), cos(t)) * 0.35;
+            float n = fbm(vec2(puv.x * (3.0 * uScale), puv.y * 1.6) + uSeed + orb);
+            float cols = 0.5 + 0.5 * sin(puv.x * (9.0 * uScale) + n * (3.0 + 4.0 * uWarp) + t);
+            float vfade = smoothstep(0.0, 0.45, puv.y) * smoothstep(1.15, 0.5, puv.y);
+            val = clamp(cols * vfade * (0.55 + 0.7 * n), 0.0, 1.0);
+        } else if (uPattern == 41) {    // nebula — domain-warped clouds
+            vec2 orb = vec2(sin(t), cos(t)) * 0.2;
+            vec2 q = puv * (2.5 * uScale) + uSeed + orb;
+            float warp = fbm(q);
+            float f = fbm(q + (1.5 + 2.0 * uWarp) * vec2(warp, fbm(q + 3.1)));
+            val = clamp(f * 1.35, 0.0, 1.0);
+        } else if (uPattern == 42) {    // marble — turbulent veins
+            float turb = fbm(puv * (3.0 * uScale) + uSeed + vec2(sin(t), cos(t)) * 0.25);
+            float m = 0.5 + 0.5 * sin((puv.x + puv.y) * (7.0 / max(uScale, 0.1)) + turb * (5.0 + 6.0 * uWarp) + t);
+            val = pow(clamp(m, 0.0, 1.0), 1.6);
+        } else if (uPattern == 43) {    // liquid metal — warped metallic flow
+            vec2 orb = vec2(sin(t), cos(t)) * 0.3;
+            vec2 w2 = vec2(fbm(puv * (2.2 * uScale) + uSeed + orb), fbm(puv * (2.2 * uScale) + uSeed + 7.0 - orb));
+            float m = fbm(puv * (3.0 * uScale) + (1.5 + 2.0 * uWarp) * w2);
+            val = 0.5 + 0.5 * sin(m * 11.0 + t);
+        } else if (uPattern == 44) {    // thin film — iridescent interference
+            float d = fbm(puv * (2.2 * uScale) + uSeed) + length(ccuv) * 1.4;
+            color = 0.5 + 0.5 * cos(d * (8.0 + 8.0 * uWarp) + t + vec3(0.0, 2.094395, 4.18879));
+            haveColor = true;
+        } else if (uPattern == 45) {    // curl flow — streamlines
+            vec2 p = puv * (3.0 * uScale) + uSeed + vec2(sin(t), cos(t)) * 0.2;
+            float a = fbm(p) * 6.2831853 * (0.6 + uWarp);
+            vec2 fl = vec2(cos(a), sin(a));
+            float streak = 0.5 + 0.5 * sin((p.x * fl.y - p.y * fl.x) * 7.0 + t * 2.0);
+            val = pow(streak, 1.3);
+        } else if (uPattern == 46) {    // caustics — water light
+            vec2 p = puv * (4.0 * uScale) + uSeed;
+            float c = 0.0;
+            for (int i = 0; i < 3; i++) {
+                float fi = float(i) + 1.0;
+                c += abs(sin(p.x * fi * 1.3 + t) + cos(p.y * fi * 1.1 - t)) / fi;
+            }
+            val = pow(1.0 - clamp(c * 0.42, 0.0, 1.0), 3.0);
         }
 
         if (!haveColor) {

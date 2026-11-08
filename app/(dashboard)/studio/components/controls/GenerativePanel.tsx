@@ -47,6 +47,13 @@ const PATTERNS = [
   { value: 37, label: 'Chevron' },
   { value: 38, label: 'Argyle' },
   { value: 39, label: 'Maze' },
+  { value: 40, label: 'Aurora' },
+  { value: 41, label: 'Nebula' },
+  { value: 42, label: 'Marble' },
+  { value: 43, label: 'Liquid Metal' },
+  { value: 44, label: 'Thin Film' },
+  { value: 45, label: 'Curl Flow' },
+  { value: 46, label: 'Caustics' },
 ];
 
 const MOTIONS = [
