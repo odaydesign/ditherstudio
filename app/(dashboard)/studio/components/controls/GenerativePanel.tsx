@@ -54,6 +54,13 @@ const PATTERNS = [
   { value: 44, label: 'Thin Film' },
   { value: 45, label: 'Curl Flow' },
   { value: 46, label: 'Caustics' },
+  { value: 47, label: 'Smoke' },
+  { value: 48, label: 'Godrays' },
+  { value: 49, label: 'Crystal' },
+  { value: 50, label: 'Hex Grid' },
+  { value: 51, label: 'Lava' },
+  { value: 52, label: 'Water' },
+  { value: 53, label: 'Strands' },
 ];
 
 const MOTIONS = [

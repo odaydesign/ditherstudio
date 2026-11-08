@@ -690,6 +690,62 @@ export const generatorShader = `
                 c += abs(sin(p.x * fi * 1.3 + t) + cos(p.y * fi * 1.1 - t)) / fi;
             }
             val = pow(1.0 - clamp(c * 0.42, 0.0, 1.0), 3.0);
+        } else if (uPattern == 47) {    // smoke — wispy rising column
+            vec2 p = puv * (3.0 * uScale) + uSeed;
+            vec2 orb = vec2(sin(t), cos(t)) * 0.4;
+            vec2 w = vec2(fbm(p + orb), fbm(p + 5.2 - orb));
+            float f = fbm(p + (1.6 + 2.0 * uWarp) * w);
+            float column = smoothstep(0.0, 0.5, puv.y) * smoothstep(1.25, 0.35, puv.y);
+            val = clamp(f * 1.7 * column, 0.0, 1.0);
+        } else if (uPattern == 48) {    // godrays — radial volumetric light
+            vec2 c = puv - 0.5;
+            float ang = atan(c.y, c.x);
+            float rad = length(c);
+            float count = 10.0 + floor(10.0 * uScale);
+            float rays = 0.5 + 0.5 * sin(ang * count + t);
+            float n = fbm(vec2(ang * 2.0, rad * 5.0) + uSeed + vec2(sin(t), cos(t)) * 0.2);
+            val = clamp(rays * smoothstep(1.1, 0.05, rad * 1.2) * (0.45 + 0.9 * n), 0.0, 1.0);
+        } else if (uPattern == 49) {    // crystal — faceted stained-glass shards
+            vec2 p = puv * (3.0 * uScale) + uSeed;
+            float cell = voronoiCell(p, t * 0.5);
+            float edge = voronoi(p, t * 0.5);
+            color = samplePalette(cell) * (0.5 + 0.5 * smoothstep(0.0, 0.09, edge));
+            haveColor = true;
+        } else if (uPattern == 50) {    // hex grid — pulsing honeycomb
+            vec2 p = puv * (4.0 * uScale) + uSeed;
+            vec2 a = mod(p, vec2(1.0, 1.7320508)) - vec2(0.5, 0.8660254);
+            vec2 b2 = mod(p + vec2(0.5, 0.8660254), vec2(1.0, 1.7320508)) - vec2(0.5, 0.8660254);
+            vec2 gv = dot(a, a) < dot(b2, b2) ? a : b2;
+            float d = sdHexagon(gv, 0.5);
+            float id = hash21(floor(p - gv));
+            float pulse = 0.5 + 0.5 * sin(t + id * 6.2831853);
+            val = mix(0.12, 1.0, pulse) * smoothstep(0.03, -0.16, d);
+        } else if (uPattern == 51) {    // lava — flowing metaballs
+            float m = 0.0;
+            for (int i = 0; i < 5; i++) {
+                float fi = float(i);
+                vec2 ctr = vec2(0.5 + 0.34 * sin(t + fi * 1.3 + uSeed), 0.5 + 0.34 * cos(t + fi * 2.1));
+                float rr = 0.12 + 0.05 * sin(fi);
+                vec2 dd = (puv - ctr) * asp;
+                m += (rr * rr) / (dot(dd, dd) + 0.001);
+            }
+            val = smoothstep(0.8, 2.6, m);
+        } else if (uPattern == 52) {    // water — interfering ripples
+            vec2 c = puv * asp;
+            float wv = 0.0;
+            for (int i = 0; i < 4; i++) {
+                float fi = float(i) + 1.0;
+                vec2 src = vec2(0.3 + 0.4 * hash21(vec2(fi, 1.0) + uSeed), 0.3 + 0.4 * hash21(vec2(fi, 2.0) + uSeed));
+                float dr = length(c - src * asp);
+                wv += sin(dr * (18.0 / max(uScale, 0.1)) - t * 2.0) / fi;
+            }
+            val = pow(clamp(0.5 + 0.5 * wv, 0.0, 1.0), 1.5);
+        } else if (uPattern == 53) {    // strands — flowing fibres
+            vec2 p = puv * vec2(2.0 * uScale, 6.0 * uScale) + uSeed;
+            float wave = fbm(vec2(p.x * 0.5, p.y * 0.1) + vec2(sin(t), cos(t)) * 0.3) * (1.0 + 2.0 * uWarp);
+            float strands = 0.5 + 0.5 * sin(p.x * 6.2831853 + wave * 6.0);
+            float fiber = fbm(vec2(p.x * 3.0, p.y) + uSeed);
+            val = clamp(strands * (0.5 + 0.6 * fiber), 0.0, 1.0);
         }
 
         if (!haveColor) {
